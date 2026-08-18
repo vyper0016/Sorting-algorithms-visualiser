@@ -1,5 +1,7 @@
 import logging
+
 import icontract
+
 from stats import Stats
 
 logger = logging.getLogger(__name__)
@@ -93,5 +95,6 @@ if __name__ == "__main__":
     tracked_array.swap(1, 3)
     print(tracked_array)
     print(
-        f"Reads: {stats.reads}, Writes: {stats.writes}, Comparisons: {stats.comparisons}"
+        f"Reads: {stats.reads}, Writes: {stats.writes}, "
+        f"Comparisons: {stats.comparisons}"
     )

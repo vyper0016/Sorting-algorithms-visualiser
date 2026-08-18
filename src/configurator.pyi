@@ -1,7 +1,6 @@
-import customtkinter as ctk
-
 # from src.generator import *
-import json
+
+import customtkinter as ctk
 
 class Configurator(ctk.CTk):
     def __init__(self): ...

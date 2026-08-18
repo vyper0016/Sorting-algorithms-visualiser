@@ -1,7 +1,5 @@
-import pygame
+from src.configurator import Configurator
 from src.trackables import TrackedArray
-
-# from src.configurator import *
 
 class GUI:
     def __init__(self, width: int, height: int, config: Configurator): ...
