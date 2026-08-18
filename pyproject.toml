@@ -5,7 +5,7 @@ requires-python = ">=3.11"
 dependencies = ["icontract", "customtkinter"]
 
 [project.optional-dependencies]
-dev = ["pytest", "black", "ruff", "mypy", "pre-commit", "fawltydeps"]
+dev = ["pytest", "black", "ruff", "mypy", "pre-commit", "fawltydeps", "interrogate"]
 
 [tool.black]
 line-length = 88
@@ -31,6 +31,20 @@ module = "tests.*"
 disallow_untyped_defs = false
 disallow_untyped_calls = false
 
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = ["src", "tests"]
+pythonpath = ["src"]
+
+[tool.interrogate]
+fail-under = 80
+ignore-init-method = true
+ignore-magic = true
+ignore-private = true
+ignore-module = true
+ignore-regex = ["^(append|extend|insert|remove|pop|clear)$"]
+exclude = ["tests"]
+
 [tool.fawltydeps]
 code = ["src", "tests"]
 deps = ["pyproject.toml"]
@@ -42,4 +56,5 @@ ignore_unused = [
     "mypy",
     "pre-commit",
     "fawltydeps",
+    "interrogate",
 ]

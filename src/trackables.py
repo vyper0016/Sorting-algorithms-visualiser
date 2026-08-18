@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 class TrackedInteger(int):
+    """An int that records every comparison it takes part in via Stats."""
+
     stats: Stats
 
     def __new__(cls, value: int, stats: Stats) -> "TrackedInteger":
@@ -48,6 +50,9 @@ class TrackedInteger(int):
 @icontract.invariant(lambda self: len(self) == self._original_length)
 @icontract.invariant(lambda self: {int(x) for x in self} == self._original_elements)
 class TrackedArray(list[TrackedInteger]):
+    """A list of TrackedInteger that records reads/writes and forbids resizing
+    or modification of elements."""
+
     def __init__(self, data: list[TrackedInteger], stats: Stats | None = None) -> None:
         super().__init__(data)
         self.stats = stats or Stats()
@@ -63,6 +68,7 @@ class TrackedArray(list[TrackedInteger]):
         super().__setitem__(index, value)
 
     def swap(self, i: int, j: int) -> None:
+        """Swap the elements at indices i and j."""
         self[i], self[j] = self[j], self[i]
 
     def __len__(self) -> int:
