@@ -1,3 +1,12 @@
+[project]
+name = "projekt"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["icontract", "customtkinter"]
+
+[project.optional-dependencies]
+dev = ["pytest", "black", "ruff", "mypy", "pre-commit", "fawltydeps"]
+
 [tool.black]
 line-length = 88
 target-version = ["py311"]
@@ -16,3 +25,16 @@ explicit_package_bases = true
 [[tool.mypy.overrides]]
 module = "customtkinter"
 ignore_missing_imports = true
+
+[tool.fawltydeps]
+code = ["src", "tests"]
+deps = ["pyproject.toml"]
+ignore_undeclared = ["stats", "trackables"]
+ignore_unused = [
+    "customtkinter",
+    "black",
+    "ruff",
+    "mypy",
+    "pre-commit",
+    "fawltydeps",
+]

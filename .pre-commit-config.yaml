@@ -15,3 +15,10 @@ repos:
         args: [src, tests]
         pass_filenames: false
         additional_dependencies: [icontract==2.7.3, pytest]
+  - repo: local
+    hooks:
+      - id: fawltydeps
+        name: fawltydeps
+        entry: fawltydeps
+        language: system
+        pass_filenames: false
