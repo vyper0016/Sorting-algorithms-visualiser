@@ -1,0 +1,9 @@
+import pygame
+from src.trackables import *
+from src.configurator import *
+
+class GUI:
+    def __init__(self, width: int, height: int, config: Configurator): ...
+    def draw(self, array: TrackedArray, highlights: list[int] = []): ...
+    def play_sound(self, value: int): ...
+    
