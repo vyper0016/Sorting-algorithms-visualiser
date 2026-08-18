@@ -1,5 +1,5 @@
-from src.configurator import Configurator
-from src.trackables import TrackedArray
+from configurator import Configurator
+from trackables import TrackedArray
 
 class GUI:
     def __init__(self, width: int, height: int, config: Configurator): ...

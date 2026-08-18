@@ -8,3 +8,10 @@ repos:
     rev: 26.5.1
     hooks:
       - id: black
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v2.3.1
+    hooks:
+      - id: mypy
+        args: [src, tests]
+        pass_filenames: false
+        additional_dependencies: [icontract==2.7.3, pytest]

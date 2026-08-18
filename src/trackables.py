@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 class TrackedInteger(int):
+    stats: Stats
+
     def __new__(cls, value: int, stats: Stats) -> "TrackedInteger":
         instance = super().__new__(cls, value)
         instance.stats = stats
@@ -52,11 +54,11 @@ class TrackedArray(list):
         self._original_length = len(self)
         self._original_elements = frozenset(int(x) for x in self)
 
-    def __getitem__(self, index: int) -> TrackedInteger:
+    def __getitem__(self, index: int) -> TrackedInteger:  # type: ignore[override]
         self.stats.on_read()
         return super().__getitem__(index)
 
-    def __setitem__(self, index: int, value: TrackedInteger) -> None:
+    def __setitem__(self, index: int, value: TrackedInteger) -> None:  # type: ignore[override]
         self.stats.on_write()
         super().__setitem__(index, value)
 

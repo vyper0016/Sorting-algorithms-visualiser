@@ -1,4 +1,4 @@
-from src.trackables import TrackedArray
+from trackables import TrackedArray
 
 def generate_random_array(
     size: int, min_value: int = 0, max_value: int = 100
