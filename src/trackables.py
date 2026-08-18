@@ -16,38 +16,38 @@ class TrackedInteger(int):
         return instance
 
     # to track comparisons
-    def __gt__(self, value):
+    def __gt__(self, value: int) -> bool:
         logger.debug(f"Comparing {self} > {value}")
         self.stats.on_comparison()
         return super().__gt__(value)
 
-    def __lt__(self, value):
+    def __lt__(self, value: int) -> bool:
         logger.debug(f"Comparing {self} < {value}")
         self.stats.on_comparison()
         return super().__lt__(value)
 
-    def __eq__(self, value):
+    def __eq__(self, value: object) -> bool:
         logger.debug(f"Comparing {self} == {value}")
         self.stats.on_comparison()
         return super().__eq__(value)
 
-    def __ge__(self, value):
+    def __ge__(self, value: int) -> bool:
         logger.debug(f"Comparing {self} >= {value}")
         self.stats.on_comparison()
         return super().__ge__(value)
 
-    def __le__(self, value):
+    def __le__(self, value: int) -> bool:
         logger.debug(f"Comparing {self} <= {value}")
         self.stats.on_comparison()
         return super().__le__(value)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return super().__hash__()
 
 
 @icontract.invariant(lambda self: len(self) == self._original_length)
 @icontract.invariant(lambda self: {int(x) for x in self} == self._original_elements)
-class TrackedArray(list):
+class TrackedArray(list[TrackedInteger]):
     def __init__(self, data: list[TrackedInteger], stats: Stats | None = None) -> None:
         super().__init__(data)
         self.stats = stats or Stats()
@@ -69,22 +69,22 @@ class TrackedArray(list):
         return super().__len__()
 
     # override explicitly to ensure icontract
-    def append(self, value):
+    def append(self, value):  # type: ignore[no-untyped-def]
         return super().append(value)
 
-    def extend(self, iterable):
+    def extend(self, iterable):  # type: ignore[no-untyped-def]
         return super().extend(iterable)
 
-    def insert(self, index, value):
+    def insert(self, index, value):  # type: ignore[no-untyped-def]
         return super().insert(index, value)
 
-    def remove(self, value):
+    def remove(self, value):  # type: ignore[no-untyped-def]
         return super().remove(value)
 
-    def pop(self, index=-1):
+    def pop(self, index=-1):  # type: ignore[no-untyped-def]
         return super().pop(index)
 
-    def clear(self):
+    def clear(self):  # type: ignore[no-untyped-def]
         return super().clear()
 
 

@@ -12,7 +12,7 @@ repos:
     rev: v2.3.1
     hooks:
       - id: mypy
-        args: [src, tests]
+        args: [--strict, --config-file=pyproject.toml, src, tests]
         pass_filenames: false
         additional_dependencies: [icontract==2.7.3, pytest]
   - repo: local
@@ -22,3 +22,9 @@ repos:
         entry: fawltydeps
         language: system
         pass_filenames: false
+      - id: pytest
+        name: pytest
+        entry: pytest
+        language: system
+        pass_filenames: false
+        types: [python]
