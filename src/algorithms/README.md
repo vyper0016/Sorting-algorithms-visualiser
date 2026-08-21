@@ -35,13 +35,26 @@ Details:
   that bills its reads and writes to the same counters, so the totals stay
   honest. Buffers are never drawn — only the array you were handed is. A plain
   `[0] * n` works too, but hides that work from the counters.
-- **Write back only elements you took out.** `snapshot()` asserts only that the
-  array is still the same length, so resizing it (`append`, `pop`) raises there.
-  Values are checked per frame by the shared suite instead: a frame may not
-  contain a value the input did not. Mid-merge a value may legitimately appear
-  twice — while it is being copied back out of a buffer, memory really does hold
-  it twice — so it is the finished array that must be a permutation of the
-  input.
+- **Write back only elements you took out.** `append`, `extend`, `insert`,
+  `pop`, `remove`, `clear`, `del arr[i]`, `arr += ...`, `arr *= ...` and a
+  slice assignment that changes the length all raise `TypeError` where you call
+  them — an algorithm may not resize the array it was handed. `reverse()` is
+  refused too: it would move every element in C without counting a write.
+  `snapshot()` still checks the length as a last line of defence, for a resize
+  that went round the API. Values are checked per frame by the shared suite
+  instead: a frame may not contain a value the input did not. Mid-merge a value
+  may legitimately appear twice — while it is being copied back out of a
+  buffer, memory really does hold it twice — so it is the finished array that
+  must be a permutation of the input.
+
+  Not refused, but still a hole: `arr.sort()` counts its comparisons and none
+  of its writes, and does the algorithm for you. Don't.
+
+- **Slices and arithmetic stay tracked.** `arr[i:j]` bills one read per element
+  copied and hands back a `TrackedArray` on the same counters, not a plain
+  list; `arr.copy()` is the same thing. `TrackedInteger` arithmetic (`+`, `-`,
+  `*`, `//`, `%`, unary `-`, `abs`) returns a `TrackedInteger` on the same
+  `Stats`, so a derived value keeps counting its comparisons.
 - **Handle size 0 and 1** — they must yield no frames.
 
 ## Registration

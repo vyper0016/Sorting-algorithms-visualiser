@@ -53,6 +53,50 @@ class TestTrackedInteger:
         TrackedInteger(1, stats)
         assert stats.comparisons == 0
 
+    @pytest.mark.parametrize(
+        "op",
+        [
+            lambda a: a + 1,
+            lambda a: 1 + a,
+            lambda a: a - 1,
+            lambda a: 1 - a,
+            lambda a: a * 2,
+            lambda a: 2 * a,
+            lambda a: a // 2,
+            lambda a: 8 // a,
+            lambda a: a % 2,
+            lambda a: 8 % a,
+            lambda a: -a,
+            lambda a: abs(a),
+        ],
+        ids=[
+            "add",
+            "radd",
+            "sub",
+            "rsub",
+            "mul",
+            "rmul",
+            "floordiv",
+            "rfloordiv",
+            "mod",
+            "rmod",
+            "neg",
+            "abs",
+        ],
+    )
+    def test_arithmetic_stays_tracked(self, stats, op):
+        result = op(TrackedInteger(3, stats))
+        assert isinstance(result, TrackedInteger)
+        assert result.stats is stats
+
+    def test_arithmetic_value_correct(self, stats):
+        assert TrackedInteger(7, stats) // 2 == 3
+        assert 10 - TrackedInteger(4, stats) == 6
+
+    def test_arithmetic_does_not_count_a_comparison(self, stats):
+        TrackedInteger(3, stats) + 1
+        assert stats.comparisons == 0
+
 
 class TestTrackedArrayBasics:
     def test_init_length_and_stats(self, stats):
@@ -97,6 +141,57 @@ class TestTrackedArrayBasics:
         assert list(arr) == [3, 2, 1]
 
 
+class TestSharedStats:
+    """The array counts on the same Stats its elements carry."""
+
+    def test_stats_derived_from_elements(self, stats):
+        arr = TrackedArray([TrackedInteger(v, stats) for v in (1, 2)])
+        assert arr.stats is stats
+
+    def test_empty_array_gets_a_fresh_stats(self):
+        arr = TrackedArray([])
+        assert isinstance(arr.stats, Stats)
+
+    def test_elements_on_different_stats_rejected(self, stats):
+        with pytest.raises(icontract.ViolationError):
+            TrackedArray([TrackedInteger(1, stats), TrackedInteger(2, Stats())])
+
+    def test_stats_not_matching_elements_rejected(self, stats):
+        with pytest.raises(icontract.ViolationError):
+            TrackedArray([TrackedInteger(1, stats)], Stats())
+
+    def test_element_comparison_lands_on_array_stats(self, stats):
+        arr = TrackedArray([TrackedInteger(v, stats) for v in (1, 2)])
+        _ = arr[0] < arr[1]
+        assert (arr.stats.reads, arr.stats.comparisons) == (2, 1)
+
+
+class TestSlices:
+    def test_slice_reads_every_element_copied(self, stats):
+        arr = make_array([1, 2, 3, 4], stats)
+        arr[1:3]
+        assert stats.reads == 2
+
+    def test_slice_returns_tracked_array_sharing_stats(self, stats):
+        head = make_array([1, 2, 3], stats)[:2]
+        assert type(head) is TrackedArray
+        assert head.stats is stats
+        assert list(head) == [1, 2]
+
+    def test_copy_is_tracked_and_billed(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        duplicate = arr.copy()
+        assert type(duplicate) is TrackedArray
+        assert list(duplicate) == [1, 2, 3]
+        assert stats.reads == 3
+
+    def test_same_length_slice_assignment_counts_writes(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr[0:2] = [TrackedInteger(9, stats), TrackedInteger(8, stats)]
+        assert list(arr) == [9, 8, 3]
+        assert stats.writes == 2
+
+
 class TestSnapshot:
     def test_values_and_counters(self, stats):
         arr = make_array([3, 1, 2], stats)
@@ -130,8 +225,8 @@ class TestSnapshot:
         assert make_array([], stats).snapshot() == Snapshot((), 0, 0, 0)
 
 
-class TestSnapshotValidation:
-    """Only resizing is a runtime error."""
+class TestRejectedMutation:
+    """Resizing or moving elements uncounted fails where it is called."""
 
     @pytest.mark.parametrize(
         "mutate",
@@ -142,12 +237,44 @@ class TestSnapshotValidation:
             lambda arr, stats: arr.remove(TrackedInteger(2, stats)),
             lambda arr, stats: arr.pop(),
             lambda arr, stats: arr.clear(),
+            lambda arr, stats: arr.reverse(),
+            lambda arr, stats: arr.__delitem__(0),
+            lambda arr, stats: arr.__iadd__([TrackedInteger(4, stats)]),
+            lambda arr, stats: arr.__imul__(2),
+            lambda arr, stats: arr.__setitem__(slice(0, 2), []),
         ],
-        ids=["append", "extend", "insert", "remove", "pop", "clear"],
+        ids=[
+            "append",
+            "extend",
+            "insert",
+            "remove",
+            "pop",
+            "clear",
+            "reverse",
+            "del",
+            "iadd",
+            "imul",
+            "resizing_slice_assignment",
+        ],
     )
-    def test_resize_detected_at_snapshot(self, stats, mutate):
+    def test_rejected_at_call(self, stats, mutate):
         arr = make_array([1, 2, 3], stats)
-        mutate(arr, stats)
+        with pytest.raises(TypeError):
+            mutate(arr, stats)
+
+    def test_rejection_leaves_array_and_counters_untouched(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        with pytest.raises(TypeError):
+            arr.append(TrackedInteger(4, stats))
+        assert list(arr) == [1, 2, 3]
+        assert (stats.reads, stats.writes) == (0, 0)
+
+
+class TestSnapshotValidation:
+
+    def test_resize_detected_at_snapshot(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        list.append(arr, TrackedInteger(4, stats))
         with pytest.raises(icontract.ViolationError):
             arr.snapshot()
 

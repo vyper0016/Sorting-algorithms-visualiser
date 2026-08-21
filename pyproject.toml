@@ -42,6 +42,10 @@ ignore-init-method = true
 ignore-magic = true
 ignore-private = true
 ignore-module = true
+ignore-overloaded-functions = true
+# TrackedArray's rejected list methods: one line that raises, named by the
+# message it raises. See src/algorithms/README.md for why they are refused.
+ignore-regex = ["append", "extend", "insert", "pop", "remove", "clear", "reverse"]
 exclude = ["tests"]
 
 [tool.fawltydeps]
