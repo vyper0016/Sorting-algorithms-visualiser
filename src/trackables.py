@@ -1,5 +1,4 @@
 import logging
-from collections import Counter
 from dataclasses import dataclass
 
 import icontract
@@ -53,8 +52,7 @@ class TrackedInteger(int):
 class Snapshot:
     """Immutable record of a TrackedArray's contents and counters at one moment.
 
-    One snapshot is one frame for the visualiser, and the point at which the
-    array's contents are checked for corruption.
+    One snapshot is one frame for the visualiser.
 
     >>> snap = Snapshot((3, 1, 2), reads=4, writes=2, comparisons=7)
     >>> snap.values
@@ -72,11 +70,6 @@ class Snapshot:
 class TrackedArray(list[TrackedInteger]):
     """A list of TrackedInteger that records reads and writes.
 
-    A sorting algorithm may only permute the array: it must not resize it or
-    introduce values that were not there to begin with. That is checked as a
-    postcondition of `snapshot`, not as a class invariant, so an algorithm pays
-    O(n) per frame instead of O(n) per element access.
-
     >>> stats = Stats()
     >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1, 2)], stats)
     >>> arr.swap(0, 2)
@@ -88,7 +81,6 @@ class TrackedArray(list[TrackedInteger]):
         super().__init__(data)
         self.stats = stats or Stats()
         self._original_length = len(self)
-        self._original_elements: Counter[int] = Counter(int(x) for x in self)
 
     def __getitem__(self, index: int) -> TrackedInteger:  # type: ignore[override]
         self.stats.on_read()
@@ -102,19 +94,29 @@ class TrackedArray(list[TrackedInteger]):
         """Swap the elements at indices i and j."""
         self[i], self[j] = self[j], self[i]
 
+    @icontract.require(lambda size: size >= 0)
+    def buffer(self, size: int = 0) -> "TrackedArray":
+        """Return zero-filled scratch space that bills to this array's stats.
+
+        Useful for out-of-place algorithms.
+
+        >>> stats = Stats()
+        >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1)], stats)
+        >>> buf = arr.buffer(2)
+        >>> buf[0] = arr[0]
+        >>> stats.reads, stats.writes
+        (1, 1)
+        """
+        return TrackedArray(
+            [TrackedInteger(0, self.stats) for _ in range(size)], self.stats
+        )
+
     @icontract.ensure(
         lambda self, result: len(result.values) == self._original_length,
         "array was resized",
     )
-    @icontract.ensure(
-        lambda self, result: Counter(result.values) == self._original_elements,
-        "array is no longer a permutation of its original elements",
-    )
     def snapshot(self) -> Snapshot:
         """Capture contents and counters, verifying the array is still intact.
-
-        Iterating `self` goes through `list.__iter__`, not `__getitem__`, so
-        taking a snapshot does not itself count as a read.
 
         >>> stats = Stats()
         >>> arr = TrackedArray([TrackedInteger(1, stats)], stats)

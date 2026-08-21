@@ -14,7 +14,8 @@ def sorting_algorithm(array: TrackedArray) -> Iterator[Snapshot]: ...
 | Returns a new sorted list | Sorts `array` **in place** and returns nothing |
 | Runs to completion | Is a **generator**: `yield array.snapshot()` at every step the visualiser should draw |
 | Any container works | Takes a `TrackedArray`, so `[]`, `[] =` and `swap` count reads/writes |
-| Free to build new values | May only **permute** the elements it was given |
+| Free to allocate scratch lists | Takes scratch space from `array.buffer(n)`, so work done in it still counts |
+| Free to build new values | Must end with the **same elements** it was given |
 
 Details:
 
@@ -29,11 +30,18 @@ Details:
 - **Compare with operators.** `TrackedInteger` counts comparisons in `<`, `>`,
   `<=`, `>=`, `==`. `sorted()`, `list.sort()` and `heapq` use those too, but
   they do the sorting for you — write the loops yourself.
-- **Write back only elements you took out.** `snapshot()` asserts the array is
-  still the same length and the same multiset of values (an `icontract`
-  postcondition). Inserting a fresh `int` or a sentinel raises there, not where
-  the bug is. Temporaries (merge buffers, pivots) are fine as long as everything
-  ends up back in the array.
+- **Take scratch space from the array.** Out-of-place algorithms need somewhere
+  to put elements: `buf = array.buffer(n)` gives a zero-filled `TrackedArray`
+  that bills its reads and writes to the same counters, so the totals stay
+  honest. Buffers are never drawn — only the array you were handed is. A plain
+  `[0] * n` works too, but hides that work from the counters.
+- **Write back only elements you took out.** `snapshot()` asserts only that the
+  array is still the same length, so resizing it (`append`, `pop`) raises there.
+  Values are checked per frame by the shared suite instead: a frame may not
+  contain a value the input did not. Mid-merge a value may legitimately appear
+  twice — while it is being copied back out of a buffer, memory really does hold
+  it twice — so it is the finished array that must be a permutation of the
+  input.
 - **Handle size 0 and 1** — they must yield no frames.
 
 ## Registration
@@ -50,7 +58,7 @@ So drop the function into `sorts.py` or a new module beside it and it is picked
 up by the visualiser and by the shared suite in
 [test_sorts.py](../../tests/test_sorts.py). Consequences:
 
-- The function must be a generator (contain a `yield`) � a plain `def` is
+- The function must be a generator (contain a `yield`) � a plain `def` is
   invisible to discovery.
 - Helper generators need a leading underscore, or they are collected as
   algorithms too. Helpers imported from another module are skipped already.

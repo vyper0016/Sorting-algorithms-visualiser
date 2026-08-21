@@ -22,6 +22,63 @@ def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
             break
 
 
+def merge_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place, yielding a Snapshot per element moved."""
+    yield from _merge_sort(array, 0, len(array) - 1)
+
+
+def _merge_sort(array: TrackedArray, left: int, right: int) -> Iterator[Snapshot]:
+    """Sort the closed interval [left, right] of `array`."""
+    if left < right:
+        mid = (left + right) // 2
+        yield from _merge_sort(array, left, mid)
+        yield from _merge_sort(array, mid + 1, right)
+        yield from _merge(array, left, mid, right)
+
+
+def _merge(array: TrackedArray, left: int, mid: int, right: int) -> Iterator[Snapshot]:
+    """Merge the sorted runs [left, mid] and [mid + 1, right] back into `array`."""
+
+    left_size = mid - left + 1
+    right_size = right - mid
+
+    left_run = array.buffer(left_size)
+    right_run = array.buffer(right_size)
+
+    for i in range(left_size):
+        left_run[i] = array[left + i]
+        yield array.snapshot()
+
+    for j in range(right_size):
+        right_run[j] = array[mid + 1 + j]
+        yield array.snapshot()
+
+    i = j = 0
+    k = left
+
+    while i < left_size and j < right_size:
+        if left_run[i] <= right_run[j]:
+            array[k] = left_run[i]
+            i += 1
+        else:
+            array[k] = right_run[j]
+            j += 1
+        k += 1
+        yield array.snapshot()
+
+    while i < left_size:
+        array[k] = left_run[i]
+        i += 1
+        k += 1
+        yield array.snapshot()
+
+    while j < right_size:
+        array[k] = right_run[j]
+        j += 1
+        k += 1
+        yield array.snapshot()
+
+
 if __name__ == "__main__":
     from generator import generate_random_array
 

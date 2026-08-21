@@ -131,10 +131,11 @@ class TestSnapshot:
 
 
 class TestSnapshotValidation:
+    """Only resizing is a runtime error."""
+
     @pytest.mark.parametrize(
         "mutate",
         [
-            lambda arr, stats: arr.__setitem__(0, TrackedInteger(99, stats)),
             lambda arr, stats: arr.append(TrackedInteger(4, stats)),
             lambda arr, stats: arr.extend([TrackedInteger(4, stats)]),
             lambda arr, stats: arr.insert(0, TrackedInteger(4, stats)),
@@ -142,29 +143,11 @@ class TestSnapshotValidation:
             lambda arr, stats: arr.pop(),
             lambda arr, stats: arr.clear(),
         ],
-        ids=["setitem", "append", "extend", "insert", "remove", "pop", "clear"],
+        ids=["append", "extend", "insert", "remove", "pop", "clear"],
     )
-    def test_mutation_detected_at_snapshot(self, stats, mutate):
+    def test_resize_detected_at_snapshot(self, stats, mutate):
         arr = make_array([1, 2, 3], stats)
         mutate(arr, stats)
-        with pytest.raises(icontract.ViolationError):
-            arr.snapshot()
-
-    def test_mutation_itself_does_not_raise(self, stats):
-        """Corruption is reported at the next snapshot, not at the call site."""
-        arr = make_array([1, 2, 3], stats)
-        arr.append(TrackedInteger(4, stats))
-        assert len(arr) == 4
-
-    def test_permutation_passes(self, stats):
-        arr = make_array([3, 1, 2], stats)
-        arr.swap(0, 1)
-        arr.swap(1, 2)
-        assert arr.snapshot().values == (1, 2, 3)
-
-    def test_duplicate_count_change_detected(self, stats):
-        arr = make_array([1, 1, 2], stats)
-        arr[0] = TrackedInteger(2, stats)
         with pytest.raises(icontract.ViolationError):
             arr.snapshot()
 
@@ -172,6 +155,41 @@ class TestSnapshotValidation:
         arr = make_array([1, 1, 2], stats)
         arr.swap(0, 2)
         assert arr.snapshot().values == (2, 1, 1)
+
+    def test_duplicate_mid_copy_allowed(self, stats):
+        """Copying out of a buffer really does put a value in memory twice."""
+        arr = make_array([1, 2, 3], stats)
+        buf = arr.buffer(1)
+        buf[0] = arr[2]
+        arr[2] = arr[0]
+        assert arr.snapshot().values == (1, 2, 1)
+
+
+class TestBuffer:
+    def test_length_and_zero_filled(self, stats):
+        assert list(make_array([1, 2, 3], stats).buffer(4)) == [0, 0, 0, 0]
+
+    def test_default_is_empty(self, stats):
+        assert list(make_array([1], stats).buffer()) == []
+
+    def test_negative_size_rejected(self, stats):
+        with pytest.raises(icontract.ViolationError):
+            make_array([1], stats).buffer(-1)
+
+    def test_shares_parent_stats(self, stats):
+        assert make_array([1, 2], stats).buffer(2).stats is stats
+
+    def test_accesses_bill_to_parent_stats(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        buf = arr.buffer(2)
+        buf[0] = TrackedInteger(9, stats)
+        buf[0]
+        assert (stats.reads, stats.writes) == (1, 1)
+
+    def test_elements_compare_on_parent_stats(self, stats):
+        buf = make_array([1, 2, 3], stats).buffer(2)
+        _ = buf[0] < buf[1]
+        assert stats.comparisons == 1
 
 
 class TestSnapshotDoesNotDisturbStats:
