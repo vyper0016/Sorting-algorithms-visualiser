@@ -24,22 +24,30 @@ def generate_random_array(
     return TrackedArray([TrackedInteger(v, stats) for v in values], stats)
 
 
-@icontract.require(lambda size: size >= 0)
-@icontract.require(lambda min_value, max_value: min_value <= max_value)
+@icontract.require(lambda step: step != 0)
 def generate_sorted_array(
-    size: int, min_value: int = 0, max_value: int = 100, reverse: bool = True
+    start: int, stop: int | None = None, step: int = 1
 ) -> TrackedArray:
-    """Build a TrackedArray of `size` ints, sorted (descending by default).
+    """Build a TrackedArray of the ints produced by `range`.
 
-    >>> arr = generate_sorted_array(5, 0, 10, reverse=False)
-    >>> list(arr) == sorted(arr)
-    True
-    >>> arr = generate_sorted_array(5, 0, 10)
-    >>> list(arr) == sorted(arr, reverse=True)
-    True
+    >>> generate_sorted_array(5)
+    [0, 1, 2, 3, 4]
+    >>> generate_sorted_array(4, -1, -1)
+    [4, 3, 2, 1, 0]
+    >>> generate_sorted_array(3, 6)
+    [3, 4, 5]
+    >>> generate_sorted_array(0, 10, 3)
+    [0, 3, 6, 9]
+    >>> generate_sorted_array(0)
+    []
     """
+    if stop is None:
+        start, stop = 0, start
     stats = Stats()
-    values = sorted(
-        (random.randint(min_value, max_value) for _ in range(size)), reverse=reverse
+    return TrackedArray(
+        [TrackedInteger(v, stats) for v in range(start, stop, step)], stats
     )
-    return TrackedArray([TrackedInteger(v, stats) for v in values], stats)
+
+
+if __name__ == "__main__":
+    print(generate_sorted_array(10))
