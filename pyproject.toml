@@ -42,7 +42,6 @@ ignore-init-method = true
 ignore-magic = true
 ignore-private = true
 ignore-module = true
-ignore-regex = ["^(append|extend|insert|remove|pop|clear)$"]
 exclude = ["tests"]
 
 [tool.fawltydeps]

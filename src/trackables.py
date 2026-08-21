@@ -1,4 +1,6 @@
 import logging
+from collections import Counter
+from dataclasses import dataclass
 
 import icontract
 
@@ -47,17 +49,46 @@ class TrackedInteger(int):
         return super().__hash__()
 
 
-@icontract.invariant(lambda self: len(self) == self._original_length)
-@icontract.invariant(lambda self: {int(x) for x in self} == self._original_elements)
+@dataclass(frozen=True)
+class Snapshot:
+    """Immutable record of a TrackedArray's contents and counters at one moment.
+
+    One snapshot is one frame for the visualiser, and the point at which the
+    array's contents are checked for corruption.
+
+    >>> snap = Snapshot((3, 1, 2), reads=4, writes=2, comparisons=7)
+    >>> snap.values
+    (3, 1, 2)
+    >>> snap.reads, snap.writes, snap.comparisons
+    (4, 2, 7)
+    """
+
+    values: tuple[int, ...]
+    reads: int
+    writes: int
+    comparisons: int
+
+
 class TrackedArray(list[TrackedInteger]):
-    """A list of TrackedInteger that records reads/writes and forbids resizing
-    or modification of elements."""
+    """A list of TrackedInteger that records reads and writes.
+
+    A sorting algorithm may only permute the array: it must not resize it or
+    introduce values that were not there to begin with. That is checked as a
+    postcondition of `snapshot`, not as a class invariant, so an algorithm pays
+    O(n) per frame instead of O(n) per element access.
+
+    >>> stats = Stats()
+    >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1, 2)], stats)
+    >>> arr.swap(0, 2)
+    >>> arr.snapshot()
+    Snapshot(values=(2, 1, 3), reads=2, writes=2, comparisons=0)
+    """
 
     def __init__(self, data: list[TrackedInteger], stats: Stats | None = None) -> None:
         super().__init__(data)
         self.stats = stats or Stats()
         self._original_length = len(self)
-        self._original_elements = frozenset(int(x) for x in self)
+        self._original_elements: Counter[int] = Counter(int(x) for x in self)
 
     def __getitem__(self, index: int) -> TrackedInteger:  # type: ignore[override]
         self.stats.on_read()
@@ -71,27 +102,31 @@ class TrackedArray(list[TrackedInteger]):
         """Swap the elements at indices i and j."""
         self[i], self[j] = self[j], self[i]
 
-    def __len__(self) -> int:
-        return super().__len__()
+    @icontract.ensure(
+        lambda self, result: len(result.values) == self._original_length,
+        "array was resized",
+    )
+    @icontract.ensure(
+        lambda self, result: Counter(result.values) == self._original_elements,
+        "array is no longer a permutation of its original elements",
+    )
+    def snapshot(self) -> Snapshot:
+        """Capture contents and counters, verifying the array is still intact.
 
-    # override explicitly to ensure icontract
-    def append(self, value):  # type: ignore[no-untyped-def]
-        return super().append(value)
+        Iterating `self` goes through `list.__iter__`, not `__getitem__`, so
+        taking a snapshot does not itself count as a read.
 
-    def extend(self, iterable):  # type: ignore[no-untyped-def]
-        return super().extend(iterable)
-
-    def insert(self, index, value):  # type: ignore[no-untyped-def]
-        return super().insert(index, value)
-
-    def remove(self, value):  # type: ignore[no-untyped-def]
-        return super().remove(value)
-
-    def pop(self, index=-1):  # type: ignore[no-untyped-def]
-        return super().pop(index)
-
-    def clear(self):  # type: ignore[no-untyped-def]
-        return super().clear()
+        >>> stats = Stats()
+        >>> arr = TrackedArray([TrackedInteger(1, stats)], stats)
+        >>> arr.snapshot()
+        Snapshot(values=(1,), reads=0, writes=0, comparisons=0)
+        """
+        return Snapshot(
+            values=tuple(int(x) for x in self),
+            reads=self.stats.reads,
+            writes=self.stats.writes,
+            comparisons=self.stats.comparisons,
+        )
 
 
 if __name__ == "__main__":
@@ -99,10 +134,6 @@ if __name__ == "__main__":
     stats = Stats()
     tracked_array = TrackedArray([TrackedInteger(i, stats) for i in range(5)], stats)
 
-    print(tracked_array)
+    print(tracked_array.snapshot())
     tracked_array.swap(1, 3)
-    print(tracked_array)
-    print(
-        f"Reads: {stats.reads}, Writes: {stats.writes}, "
-        f"Comparisons: {stats.comparisons}"
-    )
+    print(tracked_array.snapshot())

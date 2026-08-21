@@ -1,8 +1,10 @@
+from dataclasses import FrozenInstanceError
+
 import icontract
 import pytest
 
 from stats import Stats
-from trackables import TrackedArray, TrackedInteger
+from trackables import Snapshot, TrackedArray, TrackedInteger
 
 
 @pytest.fixture
@@ -94,7 +96,40 @@ class TestTrackedArrayBasics:
         assert list(arr) == [3, 2, 1]
 
 
-class TestTrackedArrayInvariant:
+class TestSnapshot:
+    def test_values_and_counters(self, stats):
+        arr = make_array([3, 1, 2], stats)
+        arr.swap(0, 2)
+        snap = arr.snapshot()
+        assert snap.values == (2, 1, 3)
+        assert (snap.reads, snap.writes, snap.comparisons) == (2, 2, 0)
+
+    def test_snapshot_is_not_an_access(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.snapshot()
+        assert (stats.reads, stats.writes, stats.comparisons) == (0, 0, 0)
+
+    def test_snapshot_holds_plain_ints(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        assert all(type(v) is int for v in arr.snapshot().values)
+
+    def test_snapshot_is_frozen(self, stats):
+        snap = make_array([1, 2, 3], stats).snapshot()
+        with pytest.raises(FrozenInstanceError):
+            snap.values = ()
+
+    def test_snapshot_detached_from_later_mutation(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        snap = arr.snapshot()
+        arr.swap(0, 2)
+        assert snap.values == (1, 2, 3)
+        assert arr.snapshot().values == (3, 2, 1)
+
+    def test_empty_array(self, stats):
+        assert make_array([], stats).snapshot() == Snapshot((), 0, 0, 0)
+
+
+class TestSnapshotValidation:
     @pytest.mark.parametrize(
         "mutate",
         [
@@ -108,7 +143,31 @@ class TestTrackedArrayInvariant:
         ],
         ids=["setitem", "append", "extend", "insert", "remove", "pop", "clear"],
     )
-    def test_mutation_violates_invariant(self, stats, mutate):
+    def test_mutation_detected_at_snapshot(self, stats, mutate):
         arr = make_array([1, 2, 3], stats)
+        mutate(arr, stats)
         with pytest.raises(icontract.ViolationError):
-            mutate(arr, stats)
+            arr.snapshot()
+
+    def test_mutation_itself_does_not_raise(self, stats):
+        """Corruption is reported at the next snapshot, not at the call site."""
+        arr = make_array([1, 2, 3], stats)
+        arr.append(TrackedInteger(4, stats))
+        assert len(arr) == 4
+
+    def test_permutation_passes(self, stats):
+        arr = make_array([3, 1, 2], stats)
+        arr.swap(0, 1)
+        arr.swap(1, 2)
+        assert arr.snapshot().values == (1, 2, 3)
+
+    def test_duplicate_count_change_detected(self, stats):
+        arr = make_array([1, 1, 2], stats)
+        arr[0] = TrackedInteger(2, stats)
+        with pytest.raises(icontract.ViolationError):
+            arr.snapshot()
+
+    def test_permutation_of_duplicates_allowed(self, stats):
+        arr = make_array([1, 1, 2], stats)
+        arr.swap(0, 2)
+        assert arr.snapshot().values == (2, 1, 1)
