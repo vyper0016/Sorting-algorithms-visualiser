@@ -3,6 +3,7 @@ from dataclasses import FrozenInstanceError
 import icontract
 import pytest
 
+from algorithms import ALGORITHMS
 from stats import Stats
 from trackables import Snapshot, TrackedArray, TrackedInteger
 
@@ -171,3 +172,34 @@ class TestSnapshotValidation:
         arr = make_array([1, 1, 2], stats)
         arr.swap(0, 2)
         assert arr.snapshot().values == (2, 1, 1)
+
+
+class TestSnapshotDoesNotDisturbStats:
+
+    def test_counters_unchanged_after_activity(self, stats):
+        arr = make_array([3, 1, 2], stats)
+        arr.swap(0, 2)
+        _ = arr[1] > arr[2]
+        before = (stats.reads, stats.writes, stats.comparisons)
+        arr.snapshot()
+        assert (stats.reads, stats.writes, stats.comparisons) == before
+
+    @pytest.mark.parametrize("algorithm", ALGORITHMS.values(), ids=ALGORITHMS)
+    def test_sort_costs_the_same_without_snapshots(self, stats, algorithm, monkeypatch):
+        """A run that snapshots every step must cost exactly what a silent run costs."""
+        values = [5, 3, 4, 1, 2, 1]
+        with_frames = make_array(values, stats)
+        assert list(algorithm(with_frames))
+        tracked = (stats.reads, stats.writes, stats.comparisons)
+
+        monkeypatch.setattr(TrackedArray, "snapshot", lambda self: None)
+        silent_stats = Stats()
+        silent = make_array(values, silent_stats)
+        list(algorithm(silent))
+
+        assert tracked == (
+            silent_stats.reads,
+            silent_stats.writes,
+            silent_stats.comparisons,
+        )
+        assert list(with_frames) == list(silent)

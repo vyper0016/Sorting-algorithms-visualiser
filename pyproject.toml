@@ -47,7 +47,7 @@ exclude = ["tests"]
 [tool.fawltydeps]
 code = ["src", "tests"]
 deps = ["pyproject.toml"]
-ignore_undeclared = ["generator", "stats", "trackables"]
+ignore_undeclared = ["algorithms", "generator", "stats", "trackables"]
 ignore_unused = [
     "customtkinter",
     "black",
