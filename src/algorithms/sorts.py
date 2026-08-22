@@ -1,9 +1,11 @@
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 
 from tracked_array import Color, Snapshot, TrackedArray, from_hex
 
 _RUN_END: Color = from_hex("#ffd166")
 _SPLIT: Color = from_hex("#c792ea")
+_PIVOT: Color = from_hex("#ef476f")
+_HEAP_BOUNDARY: Color = from_hex("#06d6a0")
 
 
 def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
@@ -109,6 +111,103 @@ def _merge(array: TrackedArray, left: int, mid: int, right: int) -> Iterator[Sna
     array.unmark(left)
     array.unmark(mid)
     array.unmark(right)
+
+
+def selection_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    n = len(array)
+
+    for i in range(n - 1):
+        min_index = i
+
+        for j in range(i + 1, n):
+            if array[j] < array[min_index]:
+                min_index = j
+            yield array.snapshot()
+
+        if min_index != i:
+            array.swap(i, min_index)
+            yield array.snapshot()
+
+
+def quick_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    yield from _quick_sort(array, 0, len(array) - 1)
+
+    if len(array) > 1:
+        yield array.snapshot()
+
+
+def _quick_sort(array: TrackedArray, low: int, high: int) -> Iterator[Snapshot]:
+    """Sort the closed interval [low, high] of `array`."""
+    if low < high:
+        pivot_index = yield from _partition(array, low, high)
+        yield from _quick_sort(array, low, pivot_index - 1)
+        yield from _quick_sort(array, pivot_index + 1, high)
+
+
+def _partition(
+    array: TrackedArray, low: int, high: int
+) -> Generator[Snapshot, None, int]:
+    """Partition [low, high] around the element at `high`, returning its final index."""
+    array.mark(high, _PIVOT)
+    pivot = array[high]
+    i = low
+
+    for j in range(low, high):
+        if array[j] < pivot:
+            array.swap(i, j)
+            i += 1
+        yield array.snapshot()
+
+    array.swap(i, high)
+    yield array.snapshot()
+    array.unmark(high)
+
+    return i
+
+
+def heap_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    n = len(array)
+
+    for root in range(n // 2 - 1, -1, -1):
+        yield from _sift_down(array, root, n)
+
+    for end in range(n - 1, 0, -1):
+        array.mark(end, _HEAP_BOUNDARY)
+        array.swap(0, end)
+        yield array.snapshot()
+        array.unmark(end)
+        yield from _sift_down(array, 0, end)
+
+    if n > 1:
+        yield array.snapshot()
+
+
+def _sift_down(array: TrackedArray, root: int, size: int) -> Iterator[Snapshot]:
+    """Restore the max-heap property for the subtree rooted at `root` in [0, size)."""
+    while True:
+        largest = root
+        left = 2 * root + 1
+        right = 2 * root + 2
+
+        if left < size:
+            if array[left] > array[largest]:
+                largest = left
+            yield array.snapshot()
+
+        if right < size:
+            if array[right] > array[largest]:
+                largest = right
+            yield array.snapshot()
+
+        if largest == root:
+            break
+
+        array.swap(root, largest)
+        yield array.snapshot()
+        root = largest
 
 
 if __name__ == "__main__":
