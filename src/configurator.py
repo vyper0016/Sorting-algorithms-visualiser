@@ -1,0 +1,444 @@
+import tkinter as tk
+from collections.abc import Callable
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import Any
+
+import customtkinter as ctk
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+from algorithms import ALGORITHMS
+from generator import (
+    generate_random_array,
+    generate_range_array,
+    generate_shuffled_array,
+)
+from tracked_array import TrackedArray
+
+_ERROR_COLOR = "#ff5555"
+_LABEL_GRID: dict[str, Any] = {"sticky": "w", "padx": 8, "pady": 4}
+
+
+class Distribution(StrEnum):
+    """The shape of the array a run starts from.
+
+    The values of every distribution span roughly the array's own length, so a
+    bar chart of one looks like a bar chart of any other. RANDOM_DISTINCT draws
+    from twice that range, which is what keeps it from being a permutation of
+    0..n-1 like SHUFFLED.
+    """
+
+    ASCENDING = "ascending"
+    DESCENDING = "descending"
+    RANDOM = "random"
+    RANDOM_DISTINCT = "random distinct"
+    SHUFFLED = "shuffled"
+
+
+class Config(BaseModel):
+    """Validated settings of one visualisation run.
+
+    Assignment is validated as well, so the window may write single fields while
+    a sort is running and the visualiser can read them once per frame.
+
+    >>> config = Config()
+    >>> config.array_size, config.algorithm
+    (64, 'bubble_sort')
+    >>> config.delay_ms = 25.0
+    >>> config.delay_ms
+    25.0
+    >>> try:
+    ...     config.array_size = 0
+    ... except ValidationError as error:
+    ...     print(error.errors()[0]["msg"])
+    Input should be greater than or equal to 2
+    """
+
+    model_config = ConfigDict(validate_assignment=True)
+
+    algorithm: str = "bubble_sort"
+    distribution: Distribution = Distribution.SHUFFLED
+    array_size: int = Field(default=64, ge=2, le=2000)
+    seed: int | None = None
+    delay_ms: float = Field(default=10.0, ge=0.0, le=500.0)
+    sound_enabled: bool = True
+    volume: float = Field(default=0.5, ge=0.0, le=1.0)
+    sustain_ms: float = Field(default=80.0, ge=1.0, le=1000.0)
+
+    @field_validator("algorithm")
+    @classmethod
+    def _known_algorithm(cls, name: str) -> str:
+        """Reject a name that the algorithms package does not offer.
+
+        >>> try:
+        ...     Config(algorithm="bogo_sort")
+        ... except ValidationError as error:
+        ...     print(error.errors()[0]["msg"])
+        Value error, unknown algorithm 'bogo_sort'
+        """
+        if name not in ALGORITHMS:
+            raise ValueError(f"unknown algorithm {name!r}")
+
+        return name
+
+    def update_fields(self, **changes: Any) -> None:
+        """Apply `changes` in one step, or raise ValidationError and change nothing.
+
+        >>> config = Config()
+        >>> config.update_fields(array_size=128, distribution="descending")
+        >>> config.array_size, config.distribution
+        (128, <Distribution.DESCENDING: 'descending'>)
+        >>> try:
+        ...     config.update_fields(array_size=1)
+        ... except ValidationError:
+        ...     config.array_size
+        128
+        """
+        validated = self.model_validate({**self.model_dump(), **changes})
+        self.__dict__.update(validated.__dict__)
+
+    def build_array(self) -> TrackedArray:
+        """A freshly generated array for these settings.
+
+        >>> Config(array_size=5, distribution="ascending").build_array()
+        [0, 1, 2, 3, 4]
+        >>> Config(array_size=5, distribution="descending").build_array()
+        [4, 3, 2, 1, 0]
+        >>> sorted(Config(array_size=5, distribution="shuffled").build_array())
+        [0, 1, 2, 3, 4]
+        >>> values = Config(array_size=6, distribution="random distinct").build_array()
+        >>> len(values) == len(set(values))
+        True
+        >>> len(Config(array_size=6, distribution="random").build_array())
+        6
+        """
+        size = self.array_size
+
+        match self.distribution:
+            case Distribution.ASCENDING:
+                return generate_range_array(size)
+            case Distribution.DESCENDING:
+                return generate_range_array(size - 1, -1, -1)
+            case Distribution.RANDOM:
+                return generate_random_array(size, 0, size - 1, seed=self.seed)
+            case Distribution.RANDOM_DISTINCT:
+                return generate_random_array(
+                    size, 0, 2 * size - 1, distinct=True, seed=self.seed
+                )
+            case Distribution.SHUFFLED:
+                return generate_shuffled_array(size, seed=self.seed)
+
+
+@dataclass
+class Controls:
+    """Playback state the visualiser polls once per frame.
+
+    Pausing is cooperative: the frame loop stops calling `next` on the
+    algorithm, it never kills it, so a paused array stands exactly as the last
+    drawn frame showed it and resuming continues the same run.
+
+    >>> controls = Controls()
+    >>> controls.running
+    False
+    >>> controls.toggle(); controls.running
+    True
+    >>> controls.consume_reset()
+    True
+    >>> controls.consume_reset()
+    False
+    >>> controls.request_reset(); controls.consume_reset()
+    True
+    """
+
+    running: bool = False
+    reset_requested: bool = True
+    steps_pending: int = 0
+
+    def toggle(self) -> None:
+        """Flip between running and paused."""
+        self.running = not self.running
+
+    def request_reset(self) -> None:
+        """Ask the visualiser for a new array and a new run of the algorithm."""
+        self.reset_requested = True
+
+    def consume_reset(self) -> bool:
+        """Whether a reset is pending, clearing the request."""
+        pending = self.reset_requested
+        self.reset_requested = False
+        return pending
+
+    def request_step(self) -> None:
+        """Ask for one single frame, pausing a run that is under way.
+
+        >>> controls = Controls(running=True)
+        >>> controls.request_step()
+        >>> controls.running, controls.steps_pending
+        (False, 1)
+        """
+        self.running = False
+        self.steps_pending += 1
+
+    def consume_step(self) -> bool:
+        """Whether a single frame is owed, spending one of them.
+
+        >>> controls = Controls()
+        >>> controls.request_step(); controls.request_step()
+        >>> controls.consume_step(), controls.consume_step(), controls.consume_step()
+        (True, True, False)
+        """
+        if self.steps_pending == 0:
+            return False
+
+        self.steps_pending -= 1
+        return True
+
+
+def _first_message(error: ValidationError) -> str:
+    """The first complaint in `error`, without pydantic's preamble.
+
+    >>> try:
+    ...     Config(algorithm="bogo_sort")
+    ... except ValidationError as error:
+    ...     _first_message(error)
+    "unknown algorithm 'bogo_sort'"
+    """
+    message: str = error.errors()[0]["msg"]
+    return message.removeprefix("Value error, ")
+
+
+def _parse_seed(text: str) -> int | None:
+    """The seed an entry holds, where blank means a fresh random one.
+
+    >>> _parse_seed(" 42 ")
+    42
+    >>> _parse_seed("   ") is None
+    True
+    """
+    stripped = text.strip()
+    return int(stripped) if stripped else None
+
+
+class Configurator(ctk.CTk):  # type: ignore[misc]
+    """The settings window, a second top level window beside the pygame one.
+
+    It is driven by `pump()` from the pygame frame loop rather than by `mainloop()`
+    """
+
+    def __init__(
+        self, settings: Config | None = None, controls: Controls | None = None
+    ) -> None:
+        super().__init__()
+        self.settings = settings if settings is not None else Config()
+        self.controls = controls if controls is not None else Controls()
+
+        self._alive = True
+        self._setters: dict[str, Callable[[Any], None]] = {}
+        self._entries: dict[str, ctk.CTkEntry] = {}
+
+        self.title("Sorting visualiser")
+        self.geometry("470x480")
+        self.grid_columnconfigure(1, weight=1)
+
+        self._status = ctk.CTkLabel(self, text="", anchor="w")
+        self._build_widgets()
+        self._refresh()
+
+        self.protocol("WM_DELETE_WINDOW", self.close)
+
+    def _build_widgets(self) -> None:
+        """Lay out every control, top to bottom."""
+        row = 0
+        self._add_menu(row, "Algorithm", "algorithm", list(ALGORITHMS))
+
+        row += 1
+        self._add_menu(row, "Array", "distribution", [d.value for d in Distribution])
+
+        row += 1
+        self._add_slider(row, "Array size", "array_size", 2, 500, reset=True)
+
+        row += 1
+        self._add_entry(row, "Seed (blank: random)", "seed", self._apply_seed)
+
+        row += 1
+        self._add_slider(row, "Delay (ms)", "delay_ms", 0, 200, integer=False)
+
+        row += 1
+        self._add_switch(row, "Sound", "sound_enabled")
+
+        row += 1
+        self._add_slider(row, "Volume", "volume", 0, 1, steps=20, integer=False)
+
+        row += 1
+        self._add_slider(row, "Sustain (ms)", "sustain_ms", 1, 500, integer=False)
+
+        row += 1
+        self._toggle_button = ctk.CTkButton(self, text="Start", command=self._on_toggle)
+        self._toggle_button.grid(row=row, column=0, sticky="ew", padx=8, pady=(12, 4))
+        ctk.CTkButton(self, text="Step", command=self._on_step).grid(
+            row=row, column=1, sticky="ew", padx=8, pady=(12, 4)
+        )
+        ctk.CTkButton(self, text="Reset", command=self._on_reset).grid(
+            row=row, column=2, sticky="ew", padx=8, pady=(12, 4)
+        )
+
+        row += 1
+        self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
+
+    def _add_menu(self, row: int, label: str, field: str, choices: list[str]) -> None:
+        """Add a labelled drop down writing `field`, which always resets the run."""
+        ctk.CTkLabel(self, text=label).grid(row=row, column=0, **_LABEL_GRID)
+        menu = ctk.CTkOptionMenu(
+            self,
+            values=choices,
+            command=lambda choice: self._apply({field: choice}, reset=True),
+        )
+        menu.grid(row=row, column=1, columnspan=2, sticky="ew", padx=8, pady=4)
+        self._setters[field] = menu.set
+
+    def _add_slider(
+        self,
+        row: int,
+        label: str,
+        field: str,
+        low: float,
+        high: float,
+        steps: int | None = None,
+        integer: bool = True,
+        reset: bool = False,
+    ) -> None:
+        """Add a labelled slider writing `field`, with a live read-out."""
+        ctk.CTkLabel(self, text=label).grid(row=row, column=0, **_LABEL_GRID)
+        slider = ctk.CTkSlider(
+            self,
+            from_=low,
+            to=high,
+            number_of_steps=steps if steps is not None else int(high - low),
+            command=lambda raw: self._apply(
+                {field: int(raw) if integer else round(float(raw), 2)}, reset
+            ),
+        )
+        slider.grid(row=row, column=1, sticky="ew", padx=8, pady=4)
+        readout = ctk.CTkLabel(self, text="", width=48, anchor="e")
+        readout.grid(row=row, column=2, padx=8, pady=4)
+
+        def show(value: float) -> None:
+            slider.set(value)
+            readout.configure(text=f"{value:g}")
+
+        self._setters[field] = show
+
+    def _add_entry(
+        self, row: int, label: str, field: str, commit: Callable[[], None]
+    ) -> None:
+        """Add a labelled entry for `field`, committed on Return or focus loss."""
+        ctk.CTkLabel(self, text=label).grid(row=row, column=0, **_LABEL_GRID)
+        entry = ctk.CTkEntry(self)
+        entry.grid(row=row, column=1, columnspan=2, sticky="ew", padx=8, pady=4)
+        entry.bind("<Return>", lambda _event: commit())
+        entry.bind("<FocusOut>", lambda _event: commit())
+
+        def show(value: object) -> None:
+            entry.delete(0, "end")
+            entry.insert(0, "" if value is None else str(value))
+
+        self._setters[field] = show
+        self._entries[field] = entry
+
+    def _add_switch(self, row: int, label: str, field: str) -> None:
+        """Add a switch writing the boolean `field`."""
+        switch = ctk.CTkSwitch(self, text=label)
+        switch.configure(command=lambda: self._apply({field: bool(switch.get())}))
+        switch.grid(row=row, column=0, columnspan=3, sticky="w", padx=8, pady=4)
+
+        def show(value: bool) -> None:
+            if value:
+                switch.select()
+            else:
+                switch.deselect()
+
+        self._setters[field] = show
+
+    def _apply(self, changes: dict[str, Any], reset: bool = False) -> None:
+        """Write `changes` to the settings, or report them and revert the widgets."""
+        try:
+            self.settings.update_fields(**changes)
+        except ValidationError as error:
+            self._report(_first_message(error))
+            self._refresh()
+            return
+
+        self._report("")
+
+        if reset:
+            self.controls.request_reset()
+
+    def _apply_seed(self) -> None:
+        """Commit the seed entry, where blank means a fresh random array."""
+        try:
+            seed = _parse_seed(self._entries["seed"].get())
+        except ValueError:
+            self._report("seed must be a whole number or blank")
+            self._refresh()
+            return
+
+        self._apply({"seed": seed}, reset=True)
+
+    def _refresh(self) -> None:
+        """Push every settings field back into its widget."""
+        for field, setter in self._setters.items():
+            setter(getattr(self.settings, field))
+
+        self._toggle_button.configure(
+            text="Pause" if self.controls.running else "Start"
+        )
+
+    def _report(self, message: str) -> None:
+        """Show `message` in the status line, an empty one clearing it."""
+        self._status.configure(
+            text=message, text_color=_ERROR_COLOR if message else ("gray10", "gray90")
+        )
+
+    def _on_toggle(self) -> None:
+        """Start or pause the run."""
+        self.controls.toggle()
+        self._refresh()
+
+    def _on_step(self) -> None:
+        """Pause the run and advance it by a single frame."""
+        self.controls.request_step()
+        self._refresh()
+
+    def _on_reset(self) -> None:
+        """Throw the current run away and generate a new array."""
+        self.controls.request_reset()
+        self._report("")
+
+    def get_config(self) -> Config:
+        """The live settings object, shared with the visualiser."""
+        return self.settings
+
+    def pump(self) -> bool:
+        """Serve pending Tk events once, False once the window is gone.
+
+        Called once per pygame frame in place of `mainloop()`.
+        """
+        if not self._alive:
+            return False
+
+        try:
+            self.update()
+        except tk.TclError:
+            self._alive = False
+
+        return self._alive
+
+    def close(self) -> None:
+        """Stop the run and destroy the window."""
+        self.controls.running = False
+        self._alive = False
+        self.destroy()
+
+
+if __name__ == "__main__":
+    Configurator().mainloop()

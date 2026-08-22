@@ -2,7 +2,7 @@
 name = "Sorting algorithms visualiser"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["icontract", "customtkinter"]
+dependencies = ["icontract", "customtkinter", "pydantic"]
 
 [project.optional-dependencies]
 dev = ["pytest", "black", "ruff", "mypy", "pre-commit", "fawltydeps", "interrogate"]
@@ -53,6 +53,7 @@ code = ["src", "tests"]
 deps = ["pyproject.toml"]
 ignore_undeclared = [
     "algorithms",
+    "configurator",
     "generator",
     "stats",
     "tracked_array",
