@@ -184,6 +184,30 @@ class TestTouches:
             arr[5]
         assert arr.snapshot().touches == ()
 
+    def test_snapshot_spends_the_touches(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr[0]
+        assert arr.snapshot().touches == ((0, Touch.READ),)
+        assert arr.snapshot().touches == ()
+
+    def test_frames_do_not_accumulate(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        frames = []
+        for index in range(3):
+            arr[index]
+            frames.append(arr.snapshot().touches)
+        assert frames == [
+            ((0, Touch.READ),),
+            ((1, Touch.READ),),
+            ((2, Touch.READ),),
+        ]
+
+    def test_marks_outlive_the_frame(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(1)
+        assert arr.snapshot().marks == ((1, DEFAULT_MARK_COLOR),)
+        assert arr.snapshot().marks == ((1, DEFAULT_MARK_COLOR),)
+
 
 class TestFromHex:
     """Hex codes are for the author to read; the model still stores channels."""

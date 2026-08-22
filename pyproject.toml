@@ -2,7 +2,7 @@
 name = "Sorting algorithms visualiser"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["icontract", "customtkinter", "pydantic"]
+dependencies = ["icontract", "customtkinter", "pydantic", "pygame"]
 
 [project.optional-dependencies]
 dev = ["pytest", "black", "ruff", "mypy", "pre-commit", "fawltydeps", "interrogate"]

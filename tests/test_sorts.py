@@ -38,14 +38,7 @@ class TestSorts:
         assert frames[-1].values == tuple(int(x) for x in arr)
 
     def test_frames_stay_drawable(self, algorithm):
-        """Every frame must be something the visualiser can draw.
-
-        Nothing at runtime stops an algorithm from writing a value it invented,
-        so this is where that is caught. A shuffled range gives a known legal
-        set. Buffers mean a frame may repeat a value, so this checks membership,
-        not a multiset: the end-of-run permutation is covered by
-        `test_sorts_random_array`.
-        """
+        """Every frame must be something the visualiser can draw."""
         arr = generate_shuffled_array(20, seed=4)
         legal = {int(x) for x in arr}
         size = len(arr)
@@ -54,3 +47,18 @@ class TestSorts:
             assert len(frame.values) == size, f"frame {i} resized the array"
             invented = set(frame.values) - legal
             assert not invented, f"frame {i} invented {sorted(invented)}"
+
+    def test_marks_stay_in_range(self, algorithm):
+        arr = generate_random_array(20, 0, 50, seed=5)
+        size = len(arr)
+
+        for i, frame in enumerate(algorithm(arr)):
+            for index, _color in frame.marks:
+                assert 0 <= index < size, f"frame {i} marked slot {index}"
+
+    def test_finished_array_is_unmarked(self, algorithm):
+        """A run must clean up after itself, or the last frame stays coloured."""
+        arr = generate_random_array(20, 0, 50, seed=6)
+        frames = list(algorithm(arr))
+        assert frames[-1].marks == ()
+        assert arr.snapshot().marks == ()

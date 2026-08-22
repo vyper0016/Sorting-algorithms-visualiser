@@ -1,6 +1,9 @@
 from collections.abc import Iterator
 
-from tracked_array import Snapshot, TrackedArray
+from tracked_array import Color, Snapshot, TrackedArray, from_hex
+
+_RUN_END: Color = from_hex("#ffd166")
+_SPLIT: Color = from_hex("#c792ea")
 
 
 def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
@@ -26,6 +29,9 @@ def merge_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per element moved."""
     yield from _merge_sort(array, 0, len(array) - 1)
 
+    if len(array) > 1:
+        yield array.snapshot()
+
 
 def _merge_sort(array: TrackedArray, left: int, right: int) -> Iterator[Snapshot]:
     """Sort the closed interval [left, right] of `array`."""
@@ -37,13 +43,20 @@ def _merge_sort(array: TrackedArray, left: int, right: int) -> Iterator[Snapshot
 
 
 def _merge(array: TrackedArray, left: int, mid: int, right: int) -> Iterator[Snapshot]:
-    """Merge the sorted runs [left, mid] and [mid + 1, right] back into `array`."""
+    """Merge the sorted runs [left, mid] and [mid + 1, right] back into `array`.
+
+    The window being merged is marked
+    """
 
     left_size = mid - left + 1
     right_size = right - mid
 
     left_run = array.buffer(left_size)
     right_run = array.buffer(right_size)
+
+    array.mark(left, _RUN_END)
+    array.mark(right, _RUN_END)
+    array.mark(mid, _SPLIT)
 
     for i in range(left_size):
         left_run[i] = array[left + i]
@@ -77,6 +90,10 @@ def _merge(array: TrackedArray, left: int, mid: int, right: int) -> Iterator[Sna
         j += 1
         k += 1
         yield array.snapshot()
+
+    array.unmark(left)
+    array.unmark(mid)
+    array.unmark(right)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,8 @@ repos:
       - id: mypy
         args: [--strict, --config-file=pyproject.toml, src, tests]
         pass_filenames: false
-        additional_dependencies: [icontract==2.7.3, pydantic==2.12.4, pytest]
+        additional_dependencies:
+          [icontract==2.7.3, pydantic==2.12.4, pygame==2.6.1, pytest]
   - repo: local
     hooks:
       - id: fawltydeps

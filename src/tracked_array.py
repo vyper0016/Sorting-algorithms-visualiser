@@ -290,6 +290,12 @@ class TrackedArray(list[TrackedInteger]):
         >>> arr = TrackedArray([TrackedInteger(1, stats)], stats)
         >>> arr.snapshot()
         Snapshot(values=(1,), reads=0, writes=0, comparisons=0, touches=(), marks=())
+        >>> arr[0]
+        1
+        >>> arr.snapshot().touches
+        ((0, <Touch.READ: 'read'>),)
+        >>> arr.snapshot().touches
+        ()
         """
         snapshot = Snapshot(
             values=tuple(int(x) for x in self),
@@ -299,6 +305,7 @@ class TrackedArray(list[TrackedInteger]):
             touches=tuple(self._touches),
             marks=tuple(sorted(self._marks.items())),
         )
+        self._touches.clear()
         return snapshot
 
 

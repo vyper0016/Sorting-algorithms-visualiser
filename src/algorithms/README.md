@@ -1,7 +1,6 @@
 # Writing a tracked algorithm
 
-Every algorithm here follows the contract in
-[sorting_algorithm.pyi](sorting_algorithm.pyi):
+Contract in [sorting_algorithm.pyi](sorting_algorithm.pyi):
 
 ```python
 def sorting_algorithm(array: TrackedArray) -> Iterator[Snapshot]: ...
@@ -11,50 +10,53 @@ def sorting_algorithm(array: TrackedArray) -> Iterator[Snapshot]: ...
 
 | Normal | Tracked |
 | --- | --- |
-| Returns a new sorted list | Sorts `array` **in place** and returns nothing |
-| Runs to completion | Is a **generator**: `yield array.snapshot()` at every step the visualiser should draw |
+| Returns a new sorted list | Sorts `array` **in place**, returns nothing |
+| Runs to completion | Is a **generator**: `yield array.snapshot()` per frame to draw |
 | Any container works | Takes a `TrackedArray`, so `[]`, `[] =` and `swap` count reads/writes |
-| Free to allocate scratch lists | Takes scratch space from `array.buffer(n)`, so work done in it still counts |
+| Free to allocate scratch lists | Takes scratch from `array.buffer(n)`, so that work still counts |
 | Free to build new values | Must end with the **same elements** it was given |
 
-Details:
-
-- **Yield frames, don't return.** One `yield array.snapshot()` = one animation
-  frame. `snapshot()` is O(n), so yield per comparison/swap, not per element
-  touched.
-- **Sort in place.** No `return sorted(array)`, no reassigning `array`. The
-  caller keeps a reference to the same object.
+- **Yield frames, don't return.** One `yield array.snapshot()` = one frame.
+  `snapshot()` is O(n): yield per comparison/swap, not per element touched.
+- **Sort in place.** No `return sorted(array)`, no reassigning `array` — the
+  caller keeps the same object.
 - **Go through the array.** `array[j]` counts a read, `array[j] = x` a write,
-  `array.swap(i, j)` two of each. Copying into a plain local list and sorting
-  there hides the work from the counters.
-- **Compare with operators.** `TrackedInteger` counts comparisons in `<`, `>`,
-  `<=`, `>=`, `==`. `sorted()`, `list.sort()` and `heapq` use those too, but
-  they do the sorting for you — write the loops yourself.
-- **Take scratch space from the array.** Out-of-place algorithms need somewhere
-  to put elements: `buf = array.buffer(n)` gives a zero-filled `TrackedArray`
-  that bills its reads and writes to the same counters, so the totals stay
-  honest. Buffers are never drawn — only the array you were handed is. A plain
-  `[0] * n` works too, but hides that work from the counters.
+  `array.swap(i, j)` two of each. Sorting a plain local copy hides the work.
+- **Compare with operators.** `TrackedInteger` counts `<`, `>`, `<=`, `>=`,
+  `==`. `sorted()`, `list.sort()` and `heapq` use those too, but they do the
+  sorting for you — write the loops yourself.
+- **Take scratch space from the array.** `buf = array.buffer(n)` gives a
+  zero-filled `TrackedArray` billing the same counters, so totals stay honest.
+  Buffers are never drawn — only the array you were handed. A plain `[0] * n`
+  works too, but hides that work.
+- **Mark what you want explained.** `array.mark(i, color)` colours one slot
+  until `array.unmark(i)` or `array.unmark_all()`. Marks cost nothing and
+  survive snapshots, unlike reads and writes, which colour for one frame only.
+  A mark outranks both, so mark a few landmarks, not a whole range: `merge_sort`
+  marks the two ends of the window it is merging and the split between the runs,
+  leaving everything between free to show its reads and writes. Drop the marks
+  on the way out — a `finally` around the yields catches the visualiser closing
+  the generator mid-run — and yield one last frame afterwards, or the finished
+  array stays coloured.
 - **Write back only elements you took out.** `append`, `extend`, `insert`,
   `pop`, `remove`, `clear`, `del arr[i]`, `arr += ...`, `arr *= ...` and a
-  slice assignment that changes the length all raise `TypeError` where you call
-  them — an algorithm may not resize the array it was handed. `reverse()` is
-  refused too: it would move every element in C without counting a write.
-  `snapshot()` still checks the length as a last line of defence, for a resize
-  that went round the API. Values are checked per frame by the shared suite
-  instead: a frame may not contain a value the input did not. Mid-merge a value
-  may legitimately appear twice — while it is being copied back out of a
-  buffer, memory really does hold it twice — so it is the finished array that
-  must be a permutation of the input.
+  length-changing slice assignment raise `TypeError` where you call them — an
+  algorithm may not resize the array it was handed. `reverse()` is refused too:
+  it would move every element in C without counting a write. `snapshot()` still
+  checks the length, for a resize that went round the API. Values are checked
+  per frame by the shared suite: a frame may not contain a value the input did
+  not. Mid-merge a value may legitimately appear twice — while it is copied back
+  out of a buffer, memory really does hold it twice — so it is the finished
+  array that must be a permutation of the input.
 
-  Not refused, but still a hole: `arr.sort()` counts its comparisons and none
-  of its writes, and does the algorithm for you. Don't.
+  Not refused, but still a hole: `arr.sort()` counts its comparisons and none of
+  its writes, and does the algorithm for you. Don't.
 
 - **Slices and arithmetic stay tracked.** `arr[i:j]` bills one read per element
-  copied and hands back a `TrackedArray` on the same counters, not a plain
-  list; `arr.copy()` is the same thing. `TrackedInteger` arithmetic (`+`, `-`,
-  `*`, `//`, `%`, unary `-`, `abs`) returns a `TrackedInteger` on the same
-  `Stats`, so a derived value keeps counting its comparisons.
+  copied and hands back a `TrackedArray` on the same counters, not a plain list;
+  `arr.copy()` is the same thing. `TrackedInteger` arithmetic (`+`, `-`, `*`,
+  `//`, `%`, unary `-`, `abs`) returns a `TrackedInteger` on the same `Stats`,
+  so a derived value keeps counting its comparisons.
 - **Handle size 0 and 1** — they must yield no frames.
 
 ## Registration
@@ -67,11 +69,11 @@ function name:
 from algorithms import ALGORITHMS   # {"bubble_sort": <function bubble_sort>, ...}
 ```
 
-So drop the function into `sorts.py` or a new module beside it and it is picked
-up by the visualiser and by the shared suite in
-[test_sorts.py](../../tests/test_sorts.py). Consequences:
+Drop the function into `sorts.py` or a new module beside it and the visualiser
+and the shared suite in [test_sorts.py](../../tests/test_sorts.py) pick it up.
+Consequences:
 
-- The function must be a generator (contain a `yield`) � a plain `def` is
+- The function must be a generator (contain a `yield`) — a plain `def` is
   invisible to discovery.
 - Helper generators need a leading underscore, or they are collected as
   algorithms too. Helpers imported from another module are skipped already.

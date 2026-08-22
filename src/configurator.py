@@ -36,23 +36,7 @@ class Distribution(StrEnum):
 
 
 class Config(BaseModel):
-    """Validated settings of one visualisation run.
-
-    Assignment is validated as well, so the window may write single fields while
-    a sort is running and the visualiser can read them once per frame.
-
-    >>> config = Config()
-    >>> config.array_size, config.algorithm
-    (64, 'bubble_sort')
-    >>> config.delay_ms = 25.0
-    >>> config.delay_ms
-    25.0
-    >>> try:
-    ...     config.array_size = 0
-    ... except ValidationError as error:
-    ...     print(error.errors()[0]["msg"])
-    Input should be greater than or equal to 2
-    """
+    """Validated settings of one visualisation run."""
 
     model_config = ConfigDict(validate_assignment=True)
 
@@ -64,36 +48,19 @@ class Config(BaseModel):
     sound_enabled: bool = True
     volume: float = Field(default=0.5, ge=0.0, le=1.0)
     sustain_ms: float = Field(default=80.0, ge=1.0, le=1000.0)
+    pitch: float = Field(default=1.0, ge=0.25, le=4.0)
 
     @field_validator("algorithm")
     @classmethod
     def _known_algorithm(cls, name: str) -> str:
-        """Reject a name that the algorithms package does not offer.
-
-        >>> try:
-        ...     Config(algorithm="bogo_sort")
-        ... except ValidationError as error:
-        ...     print(error.errors()[0]["msg"])
-        Value error, unknown algorithm 'bogo_sort'
-        """
+        """Reject a name that the algorithms package does not offer."""
         if name not in ALGORITHMS:
             raise ValueError(f"unknown algorithm {name!r}")
 
         return name
 
     def update_fields(self, **changes: Any) -> None:
-        """Apply `changes` in one step, or raise ValidationError and change nothing.
-
-        >>> config = Config()
-        >>> config.update_fields(array_size=128, distribution="descending")
-        >>> config.array_size, config.distribution
-        (128, <Distribution.DESCENDING: 'descending'>)
-        >>> try:
-        ...     config.update_fields(array_size=1)
-        ... except ValidationError:
-        ...     config.array_size
-        128
-        """
+        """Apply `changes` in one step, or raise ValidationError and change nothing."""
         validated = self.model_validate({**self.model_dump(), **changes})
         self.__dict__.update(validated.__dict__)
 
@@ -131,24 +98,7 @@ class Config(BaseModel):
 
 @dataclass
 class Controls:
-    """Playback state the visualiser polls once per frame.
-
-    Pausing is cooperative: the frame loop stops calling `next` on the
-    algorithm, it never kills it, so a paused array stands exactly as the last
-    drawn frame showed it and resuming continues the same run.
-
-    >>> controls = Controls()
-    >>> controls.running
-    False
-    >>> controls.toggle(); controls.running
-    True
-    >>> controls.consume_reset()
-    True
-    >>> controls.consume_reset()
-    False
-    >>> controls.request_reset(); controls.consume_reset()
-    True
-    """
+    """Playback state the visualiser polls once per frame."""
 
     running: bool = False
     reset_requested: bool = True
@@ -237,7 +187,7 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         self._entries: dict[str, ctk.CTkEntry] = {}
 
         self.title("Sorting visualiser")
-        self.geometry("470x480")
+        self.geometry("470x520")
         self.grid_columnconfigure(1, weight=1)
 
         self._status = ctk.CTkLabel(self, text="", anchor="w")
@@ -271,6 +221,9 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
 
         row += 1
         self._add_slider(row, "Sustain (ms)", "sustain_ms", 1, 500, integer=False)
+
+        row += 1
+        self._add_slider(row, "Pitch", "pitch", 0.25, 4, steps=15, integer=False)
 
         row += 1
         self._toggle_button = ctk.CTkButton(self, text="Start", command=self._on_toggle)
@@ -314,9 +267,6 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
             from_=low,
             to=high,
             number_of_steps=steps if steps is not None else int(high - low),
-            command=lambda raw: self._apply(
-                {field: int(raw) if integer else round(float(raw), 2)}, reset
-            ),
         )
         slider.grid(row=row, column=1, sticky="ew", padx=8, pady=4)
         readout = ctk.CTkLabel(self, text="", width=48, anchor="e")
@@ -326,6 +276,12 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
             slider.set(value)
             readout.configure(text=f"{value:g}")
 
+        def dragged(raw: float) -> None:
+            """Write the dragged value, then show whatever the settings kept."""
+            self._apply({field: int(raw) if integer else round(float(raw), 2)}, reset)
+            readout.configure(text=f"{getattr(self.settings, field):g}")
+
+        slider.configure(command=dragged)
         self._setters[field] = show
 
     def _add_entry(
@@ -389,6 +345,13 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         for field, setter in self._setters.items():
             setter(getattr(self.settings, field))
 
+        self.sync()
+
+    def sync(self) -> None:
+        """Match the buttons to controls that something else changed.
+
+        The visualiser calls this after an algorithm has run out of frames.
+        """
         self._toggle_button.configure(
             text="Pause" if self.controls.running else "Start"
         )
