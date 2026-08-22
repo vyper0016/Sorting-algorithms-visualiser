@@ -1,11 +1,46 @@
+import operator
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import NoReturn, SupportsIndex, overload
 
 import icontract
 
 from stats import Stats
 from tracked_integer import TrackedInteger
+
+Color = tuple[int, int, int]
+
+_HEX_COLOR = re.compile(r"#?[0-9a-fA-F]{6}\Z")
+
+
+@icontract.require(
+    lambda code: _HEX_COLOR.match(code) is not None,
+    "colour must be six hex digits, optionally prefixed with #",
+)
+def from_hex(code: str) -> Color:
+    """The (red, green, blue) channels of an #rrggbb colour.
+
+    >>> from_hex("#ff0000")
+    (255, 0, 0)
+    >>> from_hex("00ff7f")
+    (0, 255, 127)
+    >>> from_hex("#FFFFFF")
+    (255, 255, 255)
+    """
+    value = int(code.lstrip("#"), 16)
+    return (value >> 16 & 0xFF, value >> 8 & 0xFF, value & 0xFF)
+
+
+DEFAULT_MARK_COLOR: Color = from_hex("#ff0000")
+
+
+class Touch(StrEnum):
+    """What an access did to a slot, so the visualiser can colour it."""
+
+    READ = "read"
+    WRITE = "write"
 
 
 @dataclass(frozen=True)
@@ -19,12 +54,16 @@ class Snapshot:
     (3, 1, 2)
     >>> snap.reads, snap.writes, snap.comparisons
     (4, 2, 7)
+    >>> snap.touches, snap.marks
+    ((), ())
     """
 
     values: tuple[int, ...]
     reads: int
     writes: int
     comparisons: int
+    touches: tuple[tuple[int, Touch], ...] = ()
+    marks: tuple[tuple[int, Color], ...] = ()
 
 
 class TrackedArray(list[TrackedInteger]):
@@ -33,8 +72,11 @@ class TrackedArray(list[TrackedInteger]):
     >>> stats = Stats()
     >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1, 2)], stats)
     >>> arr.swap(0, 2)
-    >>> arr.snapshot()
-    Snapshot(values=(2, 1, 3), reads=2, writes=2, comparisons=0)
+    >>> snap = arr.snapshot()
+    >>> snap.values, (snap.reads, snap.writes, snap.comparisons)
+    ((2, 1, 3), (2, 2, 0))
+    >>> [(index, str(touch)) for index, touch in snap.touches]
+    [(2, 'read'), (0, 'read'), (0, 'write'), (2, 'write')]
     >>> arr.append(TrackedInteger(4, stats))
     Traceback (most recent call last):
         ...
@@ -56,6 +98,8 @@ class TrackedArray(list[TrackedInteger]):
         super().__init__(data)
         self.stats = stats if stats is not None else self._shared_stats(data)
         self._original_length = len(self)
+        self._touches: list[tuple[int, Touch]] = []
+        self._marks: dict[int, Color] = {}
 
     @staticmethod
     def _shared_stats(data: list[TrackedInteger]) -> Stats:
@@ -65,6 +109,14 @@ class TrackedArray(list[TrackedInteger]):
     def _reject(self, operation: str, effect: str) -> NoReturn:
         """Refuse an operation that would leave the counters lying."""
         raise TypeError(f"{operation} would {effect} the array being measured")
+
+    def _normalise(self, index: SupportsIndex) -> int:
+        """Turn any in-range index into its non-negative equivalent."""
+        return operator.index(index) % len(self)
+
+    def _record(self, index: SupportsIndex, touch: Touch) -> None:
+        """Remember which slot an access hit, for the next snapshot."""
+        self._touches.append((self._normalise(index), touch))
 
     @overload
     def __getitem__(self, index: SupportsIndex) -> TrackedInteger: ...
@@ -78,13 +130,17 @@ class TrackedArray(list[TrackedInteger]):
         if isinstance(index, slice):
             items = super().__getitem__(index)
 
-            for _ in items:
+            for position in range(*index.indices(len(self))):
                 self.stats.on_read()
+                self._touches.append((position, Touch.READ))
 
             return TrackedArray(items, self.stats)
 
+        # access first: an out-of-range index must raise before it is recorded
+        value = super().__getitem__(index)
         self.stats.on_read()
-        return super().__getitem__(index)
+        self._record(index, Touch.READ)
+        return value
 
     @overload
     def __setitem__(self, index: SupportsIndex, value: TrackedInteger) -> None: ...
@@ -99,18 +155,22 @@ class TrackedArray(list[TrackedInteger]):
     ) -> None:
         if isinstance(index, slice):
             values = list(value)  # type: ignore[arg-type]
+            positions = range(*index.indices(len(self)))
 
-            if len(values) != len(range(*index.indices(len(self)))):
+            if len(values) != len(positions):
                 self._reject("slice assignment of a different length", "resize")
 
-            for _ in values:
-                self.stats.on_write()
-
             super().__setitem__(index, values)
+
+            for position in positions:
+                self.stats.on_write()
+                self._touches.append((position, Touch.WRITE))
+
             return
 
-        self.stats.on_write()
         super().__setitem__(index, value)  # type: ignore[assignment]
+        self.stats.on_write()
+        self._record(index, Touch.WRITE)
 
     def swap(self, i: int, j: int) -> None:
         """Swap the elements at indices i and j."""
@@ -119,6 +179,55 @@ class TrackedArray(list[TrackedInteger]):
     def copy(self) -> "TrackedArray":
         """Return a TrackedArray of the same elements, billing one read each."""
         return self[:]
+
+    # marking: annotation for the visualiser, never billed to the counters
+    @icontract.require(
+        lambda self, index: -len(self) <= operator.index(index) < len(self),
+        "index out of range",
+    )
+    def mark(self, index: SupportsIndex, color: Color = DEFAULT_MARK_COLOR) -> None:
+        """Colour one slot until it is unmarked.
+
+        >>> stats = Stats()
+        >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1, 2)], stats)
+        >>> arr.mark(0)
+        >>> arr.mark(-1, (0, 255, 0))
+        >>> arr.snapshot().marks
+        ((0, (255, 0, 0)), (2, (0, 255, 0)))
+        >>> stats.reads, stats.writes
+        (0, 0)
+        """
+        self._marks[self._normalise(index)] = color
+
+    @icontract.require(
+        lambda self, index: -len(self) <= operator.index(index) < len(self),
+        "index out of range",
+    )
+    def unmark(self, index: SupportsIndex) -> None:
+        """Drop the colour on one slot
+
+        >>> stats = Stats()
+        >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1)], stats)
+        >>> arr.mark(0)
+        >>> arr.unmark(0)
+        >>> arr.unmark(1)
+        >>> arr.snapshot().marks
+        ()
+        """
+        self._marks.pop(self._normalise(index), None)
+
+    def unmark_all(self) -> None:
+        """Drop every colour.
+
+        >>> stats = Stats()
+        >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1)], stats)
+        >>> arr.mark(0)
+        >>> arr.mark(1)
+        >>> arr.unmark_all()
+        >>> arr.snapshot().marks
+        ()
+        """
+        self._marks.clear()
 
     # rejected: an algorithm may not resize the array it was handed
     def append(self, value: TrackedInteger) -> NoReturn:
@@ -156,7 +265,8 @@ class TrackedArray(list[TrackedInteger]):
     def buffer(self, size: int = 0) -> "TrackedArray":
         """Return zero-filled scratch space that bills to this array's stats.
 
-        Useful for out-of-place algorithms.
+        Useful for out-of-place algorithms. It carries its own touches and marks,
+        because index 3 of a buffer is not index 3 of the array it serves.
 
         >>> stats = Stats()
         >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1)], stats)
@@ -174,19 +284,22 @@ class TrackedArray(list[TrackedInteger]):
         "array was resized",
     )
     def snapshot(self) -> Snapshot:
-        """Capture contents and counters, verifying the array is still intact.
+        """Capture contents, counters, and the accesses since the last snapshot.
 
         >>> stats = Stats()
         >>> arr = TrackedArray([TrackedInteger(1, stats)], stats)
         >>> arr.snapshot()
-        Snapshot(values=(1,), reads=0, writes=0, comparisons=0)
+        Snapshot(values=(1,), reads=0, writes=0, comparisons=0, touches=(), marks=())
         """
-        return Snapshot(
+        snapshot = Snapshot(
             values=tuple(int(x) for x in self),
             reads=self.stats.reads,
             writes=self.stats.writes,
             comparisons=self.stats.comparisons,
+            touches=tuple(self._touches),
+            marks=tuple(sorted(self._marks.items())),
         )
+        return snapshot
 
 
 if __name__ == "__main__":

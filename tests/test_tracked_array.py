@@ -5,7 +5,7 @@ import pytest
 
 from algorithms import ALGORITHMS
 from stats import Stats
-from tracked_array import Snapshot, TrackedArray
+from tracked_array import DEFAULT_MARK_COLOR, Snapshot, Touch, TrackedArray, from_hex
 from tracked_integer import TrackedInteger
 
 
@@ -138,6 +138,159 @@ class TestSnapshot:
 
     def test_empty_array(self, stats):
         assert make_array([], stats).snapshot() == Snapshot((), 0, 0, 0)
+
+
+class TestTouches:
+    """Every access names the slot it hit, for one frame only."""
+
+    def test_read_recorded(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr[1]
+        assert arr.snapshot().touches == ((1, Touch.READ),)
+
+    def test_write_recorded(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr[2] = TrackedInteger(9, stats)
+        assert arr.snapshot().touches == ((2, Touch.WRITE),)
+
+    def test_negative_index_normalised(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr[-1]
+        assert arr.snapshot().touches == ((2, Touch.READ),)
+
+    def test_order_and_repeats_kept(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.swap(0, 2)
+        assert arr.snapshot().touches == (
+            (2, Touch.READ),
+            (0, Touch.READ),
+            (0, Touch.WRITE),
+            (2, Touch.WRITE),
+        )
+
+    def test_slice_read_names_every_slot(self, stats):
+        arr = make_array([1, 2, 3, 4], stats)
+        arr[1:3]
+        assert arr.snapshot().touches == ((1, Touch.READ), (2, Touch.READ))
+
+    def test_slice_write_names_every_slot(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr[0:2] = [TrackedInteger(9, stats), TrackedInteger(8, stats)]
+        assert arr.snapshot().touches == ((0, Touch.WRITE), (1, Touch.WRITE))
+
+    def test_out_of_range_read_records_nothing(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        with pytest.raises(IndexError):
+            arr[5]
+        assert arr.snapshot().touches == ()
+
+
+class TestFromHex:
+    """Hex codes are for the author to read; the model still stores channels."""
+
+    @pytest.mark.parametrize(
+        ("code", "color"),
+        [
+            ("#000000", (0, 0, 0)),
+            ("#ffffff", (255, 255, 255)),
+            ("#ff0000", (255, 0, 0)),
+            ("#00ff00", (0, 255, 0)),
+            ("#0000ff", (0, 0, 255)),
+            ("#00ff7f", (0, 255, 127)),
+        ],
+    )
+    def test_channels(self, code, color):
+        assert from_hex(code) == color
+
+    def test_hash_is_optional(self):
+        assert from_hex("00ff7f") == from_hex("#00ff7f")
+
+    def test_case_insensitive(self):
+        assert from_hex("#AaBbCc") == from_hex("#aabbcc")
+
+    def test_default_mark_color_is_red(self):
+        assert DEFAULT_MARK_COLOR == from_hex("#ff0000")
+
+    @pytest.mark.parametrize(
+        "code", ["", "#", "#fff", "#fffffff", "#gggggg", "0xff0000", "#ff 000"]
+    )
+    def test_malformed_code_rejected(self, code):
+        with pytest.raises(icontract.ViolationError):
+            from_hex(code)
+
+
+class TestMarks:
+    """Colours the algorithm author sets by hand, free and persistent."""
+
+    def test_default_color(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(1)
+        assert arr.snapshot().marks == ((1, DEFAULT_MARK_COLOR),)
+
+    def test_custom_color(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(0, (0, 0, 255))
+        assert arr.snapshot().marks == ((0, (0, 0, 255)),)
+
+    def test_remark_replaces_color(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(0, (0, 0, 255))
+        arr.mark(0, (0, 255, 0))
+        assert arr.snapshot().marks == ((0, (0, 255, 0)),)
+
+    def test_marks_sorted_by_index(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(2)
+        arr.mark(0)
+        assert [index for index, _ in arr.snapshot().marks] == [0, 2]
+
+    def test_negative_index_normalised(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(-1)
+        assert arr.snapshot().marks == ((2, DEFAULT_MARK_COLOR),)
+
+    def test_marks_survive_snapshots(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(1)
+        arr.snapshot()
+        assert arr.snapshot().marks == ((1, DEFAULT_MARK_COLOR),)
+
+    def test_unmark_removes(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(1)
+        arr.unmark(1)
+        assert arr.snapshot().marks == ()
+
+    def test_unmark_unmarked_is_harmless(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.unmark(1)
+        assert arr.snapshot().marks == ()
+
+    def test_unmark_all(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(0)
+        arr.mark(2)
+        arr.unmark_all()
+        assert arr.snapshot().marks == ()
+
+    @pytest.mark.parametrize("index", [3, -4])
+    def test_out_of_range_rejected(self, stats, index):
+        arr = make_array([1, 2, 3], stats)
+        with pytest.raises(icontract.ViolationError):
+            arr.mark(index)
+        with pytest.raises(icontract.ViolationError):
+            arr.unmark(index)
+
+    def test_marking_is_free(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(0)
+        arr.unmark(0)
+        assert (stats.reads, stats.writes, stats.comparisons) == (0, 0, 0)
+
+    def test_mark_is_not_a_touch(self, stats):
+        arr = make_array([1, 2, 3], stats)
+        arr.mark(0)
+        assert arr.snapshot().touches == ()
 
 
 class TestRejectedMutation:
