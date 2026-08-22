@@ -15,6 +15,7 @@ _WRITE: Color = from_hex("#ff5555")
 _TEXT: Color = from_hex("#e6e6e6")
 
 _HEADER = 28
+_STATUS_FONT_SIZE = 18
 _MIN_SPAN_FOR_GAP = 3.0
 _FPS = 60
 _MAX_STEPS_PER_FRAME = 512
@@ -143,6 +144,7 @@ class GUI:
         self._alive = True
         self._highest = 1
         self._finished = False
+        self._steps = 0
         self._tones: dict[int, pygame.mixer.Sound] = {}
         self._voice = (settings.sustain_ms, settings.pitch)
 
@@ -152,7 +154,7 @@ class GUI:
 
         self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
         pygame.display.set_caption("Sorting visualiser")
-        self._font = pygame.font.SysFont("consolas", 15)
+        self._font = pygame.font.SysFont("consolas", _STATUS_FONT_SIZE)
 
     @staticmethod
     def _start_mixer() -> bool:
@@ -181,6 +183,11 @@ class GUI:
         """Fix the vertical scale and the pitch range to the array `snapshot`."""
         self._highest = max(max(snapshot.values, default=1), 1)
         self._finished = False
+        self._steps = 0
+
+    def step(self) -> None:
+        """Count one snapshot taken from the algorithm, paused frames aside."""
+        self._steps += 1
 
     def finish(self) -> None:
         """Mark the run as complete, so the status line reads "done!"."""
@@ -219,7 +226,7 @@ class GUI:
         line = (
             f"n {len(snapshot.values)}   reads {snapshot.reads}   "
             f"writes {snapshot.writes}   comparisons {snapshot.comparisons}   "
-            f"{status}"
+            f"snapshots {self._steps}   {status}"
         )
         self.screen.blit(self._font.render(line, True, _TEXT), (8, 6))
 
@@ -290,6 +297,7 @@ def run(width: int = 960, height: int = 540) -> None:
                 break
 
             latest = snapshot
+            gui.step()
 
         if latest is not None:
             gui.draw(latest)
