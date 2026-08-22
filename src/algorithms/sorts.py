@@ -25,6 +25,21 @@ def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
             break
 
 
+def insertion_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    n = len(array)
+
+    for i in range(1, n):
+        j = i
+
+        while j > 0 and array[j - 1] > array[j]:
+            array.swap(j - 1, j)
+            yield array.snapshot()
+            j -= 1
+
+        yield array.snapshot()
+
+
 def merge_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per element moved."""
     yield from _merge_sort(array, 0, len(array) - 1)

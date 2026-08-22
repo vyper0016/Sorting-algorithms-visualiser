@@ -42,13 +42,13 @@ class Config(BaseModel):
 
     algorithm: str = "bubble_sort"
     distribution: Distribution = Distribution.SHUFFLED
-    array_size: int = Field(default=64, ge=2, le=2000)
+    array_size: int = Field(default=2**6, ge=2, le=2**11)
     seed: int | None = None
-    delay_ms: float = Field(default=10.0, ge=0.0, le=500.0)
+    delay_ms: float = Field(default=50.0, ge=0.0, le=2000.0)
     sound_enabled: bool = True
-    volume: float = Field(default=0.5, ge=0.0, le=1.0)
+    volume: float = Field(default=0.3, ge=0.0, le=1.0)
     sustain_ms: float = Field(default=80.0, ge=1.0, le=1000.0)
-    pitch: float = Field(default=1.0, ge=0.25, le=4.0)
+    pitch: float = Field(default=1.0, ge=0.2, le=4.0)
 
     @field_validator("algorithm")
     @classmethod
@@ -187,7 +187,7 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         self._entries: dict[str, ctk.CTkEntry] = {}
 
         self.title("Sorting visualiser")
-        self.geometry("470x520")
+        self.geometry("470x370")
         self.grid_columnconfigure(1, weight=1)
 
         self._status = ctk.CTkLabel(self, text="", anchor="w")
@@ -205,13 +205,17 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         self._add_menu(row, "Array", "distribution", [d.value for d in Distribution])
 
         row += 1
-        self._add_slider(row, "Array size", "array_size", 2, 500, reset=True)
+        self._add_slider(
+            row, "Array size", "array_size", 2, 2**11, reset=True, editable=True
+        )
 
         row += 1
         self._add_entry(row, "Seed (blank: random)", "seed", self._apply_seed)
 
         row += 1
-        self._add_slider(row, "Delay (ms)", "delay_ms", 0, 200, integer=False)
+        self._add_slider(
+            row, "Delay (ms)", "delay_ms", 0, 2000, integer=False, editable=True
+        )
 
         row += 1
         self._add_switch(row, "Sound", "sound_enabled")
@@ -220,19 +224,25 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         self._add_slider(row, "Volume", "volume", 0, 1, steps=20, integer=False)
 
         row += 1
-        self._add_slider(row, "Sustain (ms)", "sustain_ms", 1, 500, integer=False)
+        self._add_slider(row, "Sustain (ms)", "sustain_ms", 1, 1000, integer=False)
 
         row += 1
-        self._add_slider(row, "Pitch", "pitch", 0.25, 4, steps=15, integer=False)
+        self._add_slider(row, "Pitch", "pitch", 0.2, 4, integer=False)
 
         row += 1
-        self._toggle_button = ctk.CTkButton(self, text="Start", command=self._on_toggle)
-        self._toggle_button.grid(row=row, column=0, sticky="ew", padx=8, pady=(12, 4))
-        ctk.CTkButton(self, text="Step", command=self._on_step).grid(
-            row=row, column=1, sticky="ew", padx=8, pady=(12, 4)
+        buttons = ctk.CTkFrame(self, fg_color="transparent")
+        buttons.grid(row=row, column=0, columnspan=3, sticky="ew", padx=4, pady=(12, 4))
+        buttons.grid_columnconfigure((0, 1, 2), weight=1)
+
+        self._toggle_button = ctk.CTkButton(
+            buttons, text="Start", command=self._on_toggle
         )
-        ctk.CTkButton(self, text="Reset", command=self._on_reset).grid(
-            row=row, column=2, sticky="ew", padx=8, pady=(12, 4)
+        self._toggle_button.grid(row=0, column=0, sticky="ew", padx=4)
+        ctk.CTkButton(buttons, text="Step", command=self._on_step).grid(
+            row=0, column=1, sticky="ew", padx=4
+        )
+        ctk.CTkButton(buttons, text="Reset", command=self._on_reset).grid(
+            row=0, column=2, sticky="ew", padx=4
         )
 
         row += 1
@@ -259,8 +269,13 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         steps: int | None = None,
         integer: bool = True,
         reset: bool = False,
+        editable: bool = False,
     ) -> None:
-        """Add a labelled slider writing `field`, with a live read-out."""
+        """Add a labelled slider writing `field`, with a live read-out.
+
+        `editable` swaps the read-out for an entry the user can type a value
+        into directly, committed on Return or focus loss.
+        """
         ctk.CTkLabel(self, text=label).grid(row=row, column=0, **_LABEL_GRID)
         slider = ctk.CTkSlider(
             self,
@@ -268,21 +283,51 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
             to=high,
             number_of_steps=steps if steps is not None else int(high - low),
         )
-        slider.grid(row=row, column=1, sticky="ew", padx=8, pady=4)
-        readout = ctk.CTkLabel(self, text="", width=48, anchor="e")
-        readout.grid(row=row, column=2, padx=8, pady=4)
+        slider.grid(row=row, column=1, sticky="ew", padx=(8, 4), pady=4)
+
+        readout: ctk.CTkEntry | ctk.CTkLabel
+        if editable:
+            readout = ctk.CTkEntry(self, width=48, justify="right")
+        else:
+            readout = ctk.CTkLabel(self, text="", width=48, anchor="e")
+
+        readout.grid(row=row, column=2, sticky="e", padx=(0, 8), pady=4)
 
         def show(value: float) -> None:
             slider.set(value)
-            readout.configure(text=f"{value:g}")
+
+            if editable:
+                readout.delete(0, "end")
+                readout.insert(0, f"{value:g}")
+            else:
+                readout.configure(text=f"{value:g}")
 
         def dragged(raw: float) -> None:
             """Write the dragged value, then show whatever the settings kept."""
             self._apply({field: int(raw) if integer else round(float(raw), 2)}, reset)
-            readout.configure(text=f"{getattr(self.settings, field):g}")
+            show(getattr(self.settings, field))
 
         slider.configure(command=dragged)
         self._setters[field] = show
+
+        if editable:
+
+            def commit(_event: object = None) -> None:
+                """Parse the typed value and apply it, reverting if invalid."""
+                text = readout.get().strip()
+
+                try:
+                    value = int(text) if integer else float(text)
+                except ValueError:
+                    self._report(f"{label} must be a number")
+                    self._refresh()
+                    return
+
+                self._apply({field: value}, reset)
+                show(getattr(self.settings, field))
+
+            readout.bind("<Return>", commit)
+            readout.bind("<FocusOut>", commit)
 
     def _add_entry(
         self, row: int, label: str, field: str, commit: Callable[[], None]

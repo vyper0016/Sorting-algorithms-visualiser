@@ -19,10 +19,11 @@ _MIN_SPAN_FOR_GAP = 3.0
 _FPS = 60
 _MAX_STEPS_PER_FRAME = 512
 
+# sound constants
 _SAMPLE_RATE = 44100
 _CHANNELS = 16
-_MIN_FREQUENCY = 120.0
-_MAX_FREQUENCY = 1200.0
+_MIN_FREQUENCY = 100.0
+_MAX_FREQUENCY = 1100.0
 _AMPLITUDE = 0.6
 
 
@@ -30,11 +31,11 @@ def _frequency(value: int, highest: int, pitch: float = 1.0) -> float:
     """The pitch of `value`, small bars deep and tall bars bright.
 
     >>> [_frequency(v, 10) for v in (0, 5, 10)]
-    [120.0, 660.0, 1200.0]
+    [100.0, 600.0, 1100.0]
     >>> _frequency(3, 0)
-    120.0
+    100.0
     >>> _frequency(10, 10, 2.0)
-    2400.0
+    2200.0
     """
     if highest <= 0:
         return _MIN_FREQUENCY * pitch
@@ -141,6 +142,7 @@ class GUI:
         self.controls = controls
         self._alive = True
         self._highest = 1
+        self._finished = False
         self._tones: dict[int, pygame.mixer.Sound] = {}
         self._voice = (settings.sustain_ms, settings.pitch)
 
@@ -178,6 +180,11 @@ class GUI:
     def begin(self, snapshot: Snapshot) -> None:
         """Fix the vertical scale and the pitch range to the array `snapshot`."""
         self._highest = max(max(snapshot.values, default=1), 1)
+        self._finished = False
+
+    def finish(self) -> None:
+        """Mark the run as complete, so the status line reads "done!"."""
+        self._finished = True
 
     def draw(self, snapshot: Snapshot) -> None:
         """Paint `snapshot` as a bar chart with a line of counters above it."""
@@ -204,10 +211,15 @@ class GUI:
 
     def _draw_stats(self, snapshot: Snapshot) -> None:
         """Write the counters of `snapshot` across the top of the window."""
+        if self._finished:
+            status = "done!"
+        else:
+            status = "running" if self.controls.running else "paused"
+
         line = (
             f"n {len(snapshot.values)}   reads {snapshot.reads}   "
             f"writes {snapshot.writes}   comparisons {snapshot.comparisons}   "
-            f"{'running' if self.controls.running else 'paused'}"
+            f"{status}"
         )
         self.screen.blit(self._font.render(line, True, _TEXT), (8, 6))
 
@@ -274,6 +286,7 @@ def run(width: int = 960, height: int = 540) -> None:
 
             if snapshot is None:
                 controls.running = False
+                gui.finish()
                 break
 
             latest = snapshot
