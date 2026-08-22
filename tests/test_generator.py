@@ -7,7 +7,7 @@ from generator import (
     generate_shuffled_array,
 )
 from stats import Stats
-from trackables import TrackedArray
+from tracked_array import TrackedArray
 
 
 class TestGenerateRandomArray:

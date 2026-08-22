@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 
-from trackables import Snapshot, TrackedArray
+from tracked_array import Snapshot, TrackedArray
 
 
 def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:

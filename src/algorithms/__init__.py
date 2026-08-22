@@ -14,7 +14,7 @@ import inspect
 import pkgutil
 from collections.abc import Callable, Iterator
 
-from trackables import Snapshot, TrackedArray
+from tracked_array import Snapshot, TrackedArray
 
 SortingAlgorithm = Callable[[TrackedArray], Iterator[Snapshot]]
 

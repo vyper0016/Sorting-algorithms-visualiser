@@ -3,7 +3,8 @@ import random
 import icontract
 
 from stats import Stats
-from trackables import TrackedArray, TrackedInteger
+from tracked_array import TrackedArray
+from tracked_integer import TrackedInteger
 
 
 @icontract.require(lambda size: size >= 0)

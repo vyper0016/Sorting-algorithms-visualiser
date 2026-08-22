@@ -1,5 +1,5 @@
 from configurator import Configurator
-from trackables import TrackedArray
+from tracked_array import TrackedArray
 
 class GUI:
     def __init__(self, width: int, height: int, config: Configurator) -> None: ...
