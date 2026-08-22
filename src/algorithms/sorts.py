@@ -1,13 +1,13 @@
-import random
 from collections.abc import Generator, Iterator
 
-from algorithms import untested
 from tracked_array import Color, Snapshot, TrackedArray, from_hex
+from tracked_integer import TrackedInteger
 
 _RUN_END: Color = from_hex("#ffd166")
 _SPLIT: Color = from_hex("#c792ea")
 _PIVOT: Color = from_hex("#ef476f")
 _HEAP_BOUNDARY: Color = from_hex("#06d6a0")
+_CYCLE_START: Color = from_hex("#4cc9f0")
 
 
 def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
@@ -31,12 +31,17 @@ def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
 def insertion_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison."""
-    n = len(array)
+    yield from _insertion_sort_range(array, 0, len(array) - 1)
 
-    for i in range(1, n):
+
+def _insertion_sort_range(
+    array: TrackedArray, left: int, right: int
+) -> Iterator[Snapshot]:
+    """Insertion sort the closed interval [left, right] of `array`."""
+    for i in range(left + 1, right + 1):
         j = i
 
-        while j > 0 and array[j - 1] > array[j]:
+        while j > left and array[j - 1] > array[j]:
             array.swap(j - 1, j)
             yield array.snapshot()
             j -= 1
@@ -187,76 +192,212 @@ def heap_sort(array: TrackedArray) -> Iterator[Snapshot]:
         yield array.snapshot()
 
 
-def _sift_down(array: TrackedArray, root: int, size: int) -> Iterator[Snapshot]:
-    """Restore the max-heap property for the subtree rooted at `root` in [0, size)."""
+def _sift_down(
+    array: TrackedArray, root: int, size: int, low: int = 0
+) -> Iterator[Snapshot]:
+    """Restore the max-heap property for `root` in the heap [low, low + size)."""
     while True:
         largest = root
         left = 2 * root + 1
         right = 2 * root + 2
 
         if left < size:
-            if array[left] > array[largest]:
+            if array[low + left] > array[low + largest]:
                 largest = left
             yield array.snapshot()
 
         if right < size:
-            if array[right] > array[largest]:
+            if array[low + right] > array[low + largest]:
                 largest = right
             yield array.snapshot()
 
         if largest == root:
             break
 
-        array.swap(root, largest)
+        array.swap(low + root, low + largest)
         yield array.snapshot()
         root = largest
 
 
-@untested
-def bogo_sort(array: TrackedArray) -> Iterator[Snapshot]:
-    """Sort `array` ascending in place, yielding a Snapshot per comparison/shuffle."""
+def shell_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Insertion sort over a shrinking gap, yielding a Snapshot per comparison."""
     n = len(array)
+    gap = n // 2
 
-    while True:
-        sorted_ = True
+    while gap > 0:
 
-        for i in range(n - 1):
-            if array[i] > array[i + 1]:
-                sorted_ = False
+        for i in range(gap, n):
+            j = i
+
+            while j >= gap and array[j - gap] > array[j]:
+                array.swap(j - gap, j)
                 yield array.snapshot()
-                break
+                j -= gap
+
             yield array.snapshot()
 
-        if sorted_:
+        gap //= 2
+
+
+def comb_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Bubble sort over a gap shrinking by 1.3, yielding a Snapshot per comparison."""
+    n = len(array)
+    gap = n
+    sorted_ = False
+
+    while not sorted_:
+        gap = gap * 10 // 13
+
+        if gap <= 1:
+            gap = 1
+            sorted_ = True
+
+        for i in range(n - gap):
+
+            if array[i] > array[i + gap]:
+                array.swap(i, i + gap)
+                sorted_ = False
+
+            yield array.snapshot()
+
+
+def cocktail_shaker_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Bubble sort alternating direction, yielding a Snapshot per comparison."""
+    start = 0
+    end = len(array) - 1
+    swapped = True
+
+    while swapped and start < end:
+        swapped = False
+
+        for i in range(start, end):
+
+            if array[i] > array[i + 1]:
+                array.swap(i, i + 1)
+                swapped = True
+
+            yield array.snapshot()
+
+        end -= 1
+
+        if not swapped:
             break
 
-        for i in range(n - 1, 0, -1):
-            j = random.randint(0, i)
-            array.swap(i, j)
+        swapped = False
+
+        for i in range(end, start, -1):
+
+            if array[i - 1] > array[i]:
+                array.swap(i - 1, i)
+                swapped = True
+
             yield array.snapshot()
 
+        start += 1
 
-@untested
-def bozo_sort(array: TrackedArray) -> Iterator[Snapshot]:
-    """Sort `array` ascending in place, yielding a Snapshot per comparison/swap."""
+
+def gnome_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Insertion sort with a single index, yielding a Snapshot per comparison."""
     n = len(array)
 
-    while True:
-        sorted_ = True
+    if n < 2:
+        return
 
-        for i in range(n - 1):
-            if array[i] > array[i + 1]:
-                sorted_ = False
-                yield array.snapshot()
-                break
-            yield array.snapshot()
+    position = 1
 
-        if sorted_:
-            break
+    while position < n:
 
-        i, j = random.sample(range(n), 2)
-        array.swap(i, j)
+        if array[position - 1] <= array[position]:
+            position += 1
+        else:
+            array.swap(position - 1, position)
+            position = max(position - 1, 1)
+
         yield array.snapshot()
+
+
+def odd_even_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Bubble sort by odd then even pairs, yielding a Snapshot per comparison."""
+    n = len(array)
+    sorted_ = False
+
+    while not sorted_:
+        sorted_ = True
+
+        for parity in (1, 0):
+
+            for i in range(parity, n - 1, 2):
+
+                if array[i] > array[i + 1]:
+                    array.swap(i, i + 1)
+                    sorted_ = False
+
+                yield array.snapshot()
+
+
+def cycle_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place with the minimum number of writes.
+
+    Each element is counted into its final slot and written there once,
+    picking up whatever it displaced.
+    """
+    n = len(array)
+
+    for cycle_start in range(n - 1):
+        array.mark(cycle_start, _CYCLE_START)
+        item = array[cycle_start]
+        position = yield from _destination(array, item, cycle_start)
+
+        if position != cycle_start:
+            position = yield from _skip_duplicates(array, item, position)
+            item = yield from _place(array, item, position)
+
+            while position != cycle_start:
+                position = yield from _destination(array, item, cycle_start)
+                position = yield from _skip_duplicates(array, item, position)
+                item = yield from _place(array, item, position)
+
+        array.unmark(cycle_start)
+
+    if n > 1:
+        yield array.snapshot()
+
+
+def _destination(
+    array: TrackedArray, item: TrackedInteger, cycle_start: int
+) -> Generator[Snapshot, None, int]:
+    """The slot `item` belongs in: `cycle_start` plus the smaller elements after it."""
+    position = cycle_start
+
+    for i in range(cycle_start + 1, len(array)):
+
+        if array[i] < item:
+            position += 1
+
+        yield array.snapshot()
+
+    return position
+
+
+def _skip_duplicates(
+    array: TrackedArray, item: TrackedInteger, position: int
+) -> Generator[Snapshot, None, int]:
+    """Walk `position` past elements equal to `item`, keeping the sort stable-ish."""
+    while item == array[position]:
+        position += 1
+        yield array.snapshot()
+
+    return position
+
+
+def _place(
+    array: TrackedArray, item: TrackedInteger, position: int
+) -> Generator[Snapshot, None, TrackedInteger]:
+    """Write `item` into `position`, returning the element it displaced."""
+    displaced = array[position]
+    array[position] = item
+    yield array.snapshot()
+    return displaced
 
 
 if __name__ == "__main__":
