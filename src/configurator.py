@@ -17,6 +17,20 @@ from tracked_array import TrackedArray
 
 _ERROR_COLOR = "#ff5555"
 _LABEL_GRID: dict[str, Any] = {"sticky": "w", "padx": 8, "pady": 4}
+_MAX_STEPS = 2000
+
+
+def _step_count(low: float, high: float, steps: int | None, integer: bool) -> int:
+    """How many detents a slider over `low`..`high` gets."""
+    if steps is not None:
+        return steps
+
+    span = high - low
+
+    if integer:
+        return max(1, round(span))
+
+    return max(1, min(round(span * 100), _MAX_STEPS))
 
 
 class Distribution(StrEnum):
@@ -48,7 +62,7 @@ class Config(BaseModel):
     sound_enabled: bool = True
     volume: float = Field(default=0.3, ge=0.0, le=1.0)
     sustain_ms: float = Field(default=80.0, ge=1.0, le=1000.0)
-    pitch: float = Field(default=1.0, ge=0.2, le=4.0)
+    pitch: float = Field(default=1.0, ge=0.01, le=1.8)
 
     @field_validator("algorithm")
     @classmethod
@@ -227,7 +241,7 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         self._add_slider(row, "Sustain (ms)", "sustain_ms", 1, 1000, integer=False)
 
         row += 1
-        self._add_slider(row, "Pitch", "pitch", 0.2, 4, integer=False)
+        self._add_slider(row, "Pitch", "pitch", 0.01, 1.8, integer=False)
 
         row += 1
         buttons = ctk.CTkFrame(self, fg_color="transparent")
@@ -281,7 +295,7 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
             self,
             from_=low,
             to=high,
-            number_of_steps=steps if steps is not None else int(high - low),
+            number_of_steps=_step_count(low, high, steps, integer),
         )
         slider.grid(row=row, column=1, sticky="ew", padx=(8, 4), pady=4)
 
