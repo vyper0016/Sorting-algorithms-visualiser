@@ -3,7 +3,7 @@ from dataclasses import FrozenInstanceError
 import icontract
 import pytest
 
-from algorithms import ALGORITHMS
+from algorithms import TESTABLE_ALGORITHMS
 from stats import Stats
 from tracked_array import DEFAULT_MARK_COLOR, Snapshot, Touch, TrackedArray, from_hex
 from tracked_integer import TrackedInteger
@@ -421,7 +421,9 @@ class TestSnapshotDoesNotDisturbStats:
         arr.snapshot()
         assert (stats.reads, stats.writes, stats.comparisons) == before
 
-    @pytest.mark.parametrize("algorithm", ALGORITHMS.values(), ids=ALGORITHMS)
+    @pytest.mark.parametrize(
+        "algorithm", TESTABLE_ALGORITHMS.values(), ids=TESTABLE_ALGORITHMS
+    )
     def test_sort_costs_the_same_without_snapshots(self, stats, algorithm, monkeypatch):
         """A run that snapshots every step must cost exactly what a silent run costs."""
         values = [5, 3, 4, 1, 2, 1]

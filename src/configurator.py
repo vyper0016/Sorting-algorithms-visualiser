@@ -148,10 +148,10 @@ def _first_message(error: ValidationError) -> str:
     """The first complaint in `error`, without pydantic's preamble.
 
     >>> try:
-    ...     Config(algorithm="bogo_sort")
+    ...     Config(algorithm="nonexistent_sort")
     ... except ValidationError as error:
     ...     _first_message(error)
-    "unknown algorithm 'bogo_sort'"
+    "unknown algorithm 'nonexistent_sort'"
     """
     message: str = error.errors()[0]["msg"]
     return message.removeprefix("Value error, ")

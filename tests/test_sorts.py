@@ -1,6 +1,6 @@
 import pytest
 
-from algorithms import ALGORITHMS
+from algorithms import TESTABLE_ALGORITHMS
 from generator import (
     generate_random_array,
     generate_range_array,
@@ -8,7 +8,9 @@ from generator import (
 )
 
 
-@pytest.mark.parametrize("algorithm", ALGORITHMS.values(), ids=list(ALGORITHMS))
+@pytest.mark.parametrize(
+    "algorithm", TESTABLE_ALGORITHMS.values(), ids=list(TESTABLE_ALGORITHMS)
+)
 class TestSorts:
     def test_sorts_random_array(self, algorithm):
         arr = generate_random_array(40, 0, 100, seed=1)

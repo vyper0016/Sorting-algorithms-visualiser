@@ -1,5 +1,7 @@
+import random
 from collections.abc import Generator, Iterator
 
+from algorithms import untested
 from tracked_array import Color, Snapshot, TrackedArray, from_hex
 
 _RUN_END: Color = from_hex("#ffd166")
@@ -208,6 +210,53 @@ def _sift_down(array: TrackedArray, root: int, size: int) -> Iterator[Snapshot]:
         array.swap(root, largest)
         yield array.snapshot()
         root = largest
+
+
+@untested
+def bogo_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place, yielding a Snapshot per comparison/shuffle."""
+    n = len(array)
+
+    while True:
+        sorted_ = True
+
+        for i in range(n - 1):
+            if array[i] > array[i + 1]:
+                sorted_ = False
+                yield array.snapshot()
+                break
+            yield array.snapshot()
+
+        if sorted_:
+            break
+
+        for i in range(n - 1, 0, -1):
+            j = random.randint(0, i)
+            array.swap(i, j)
+            yield array.snapshot()
+
+
+@untested
+def bozo_sort(array: TrackedArray) -> Iterator[Snapshot]:
+    """Sort `array` ascending in place, yielding a Snapshot per comparison/swap."""
+    n = len(array)
+
+    while True:
+        sorted_ = True
+
+        for i in range(n - 1):
+            if array[i] > array[i + 1]:
+                sorted_ = False
+                yield array.snapshot()
+                break
+            yield array.snapshot()
+
+        if sorted_:
+            break
+
+        i, j = random.sample(range(n), 2)
+        array.swap(i, j)
+        yield array.snapshot()
 
 
 if __name__ == "__main__":

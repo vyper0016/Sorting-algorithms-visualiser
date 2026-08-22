@@ -13,10 +13,21 @@ import importlib
 import inspect
 import pkgutil
 from collections.abc import Callable, Iterator
+from typing import TypeVar
 
 from tracked_array import Snapshot, TrackedArray
 
 SortingAlgorithm = Callable[[TrackedArray], Iterator[Snapshot]]
+
+F = TypeVar("F", bound=SortingAlgorithm)
+
+_untested_names: set[str] = set()
+
+
+def untested(function: F) -> F:
+    """Mark a sorting algorithm as excluded from the automated test suite."""
+    _untested_names.add(function.__name__)
+    return function
 
 
 def discover_algorithms() -> dict[str, SortingAlgorithm]:
@@ -38,3 +49,9 @@ def discover_algorithms() -> dict[str, SortingAlgorithm]:
 
 
 ALGORITHMS: dict[str, SortingAlgorithm] = discover_algorithms()
+
+TESTABLE_ALGORITHMS: dict[str, SortingAlgorithm] = {
+    name: algorithm
+    for name, algorithm in ALGORITHMS.items()
+    if name not in _untested_names
+}

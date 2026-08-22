@@ -78,6 +78,15 @@ Consequences:
 - Helper generators need a leading underscore, or they are collected as
   algorithms too. Helpers imported from another module are skipped already.
 
+Decorate with `@untested` from [`algorithms`](__init__.py) to exclude from test suite. For the funny sorters.
+
+```python
+from algorithms import untested
+
+@untested
+def bogo_sort(array: TrackedArray) -> Iterator[Snapshot]: ...
+```
+
 ## Minimal bubble sort
 
 Untracked:
