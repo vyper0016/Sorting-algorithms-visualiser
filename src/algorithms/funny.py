@@ -15,6 +15,7 @@ def pancake_sort(array: TrackedArray) -> Iterator[Snapshot]:
     Bring the largest unsorted value to the front, then flip it to the back.
     O(n) flips, but each flip touches a whole prefix.
     """
+    array.set_current_algo("pancake sort")
     n = len(array)
 
     for size in range(n, 1, -1):
@@ -57,6 +58,7 @@ def stooge_sort(array: TrackedArray) -> Iterator[Snapshot]:
     Deterministic and correct, but O(n^2.71): three recursive calls on 2n/3
     each, where merge sort makes two on n/2.
     """
+    array.set_current_algo("stooge sort")
     yield from _stooge_sort(array, 0, len(array) - 1)
 
     if len(array) > 1:
@@ -89,6 +91,7 @@ def slow_sort(array: TrackedArray) -> Iterator[Snapshot]:
     keep the larger of their maxima, sort everything but it again. Untested
     because it is not polynomial — a few dozen elements already take forever.
     """
+    array.set_current_algo("slow sort")
     yield from _slow_sort(array, 0, len(array) - 1)
 
     if len(array) > 1:
@@ -114,6 +117,7 @@ def _slow_sort(array: TrackedArray, low: int, high: int) -> Iterator[Snapshot]:
 @untested
 def bogo_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison/shuffle."""
+    array.set_current_algo("bogo sort")
     n = len(array)
 
     while True:
@@ -138,6 +142,7 @@ def bogo_sort(array: TrackedArray) -> Iterator[Snapshot]:
 @untested
 def bozo_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison/swap."""
+    array.set_current_algo("bozo sort")
     n = len(array)
 
     while True:

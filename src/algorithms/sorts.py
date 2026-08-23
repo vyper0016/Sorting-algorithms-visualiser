@@ -12,6 +12,7 @@ _CYCLE_START: Color = from_hex("#4cc9f0")
 
 def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    array.set_current_algo("bubble sort")
     n = len(array)
 
     for i in range(n):
@@ -30,6 +31,7 @@ def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
 def insertion_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    array.set_current_algo("insertion sort")
     yield from _insertion_sort_range(array, 0, len(array) - 1)
 
 
@@ -50,6 +52,7 @@ def _insertion_sort_range(
 
 def merge_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per element moved."""
+    array.set_current_algo("merge sort")
     yield from _merge_sort(array, 0, len(array) - 1)
 
     if len(array) > 1:
@@ -121,6 +124,7 @@ def _merge(array: TrackedArray, left: int, mid: int, right: int) -> Iterator[Sna
 
 def selection_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    array.set_current_algo("selection sort")
     n = len(array)
 
     for i in range(n - 1):
@@ -138,6 +142,7 @@ def selection_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
 def quick_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    array.set_current_algo("quick sort")
     yield from _quick_sort(array, 0, len(array) - 1)
 
     if len(array) > 1:
@@ -175,6 +180,7 @@ def _partition(
 
 def heap_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per comparison."""
+    array.set_current_algo("heap sort")
     n = len(array)
 
     for root in range(n // 2 - 1, -1, -1):
@@ -220,6 +226,7 @@ def _sift_down(
 
 def shell_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Insertion sort over a shrinking gap, yielding a Snapshot per comparison."""
+    array.set_current_algo("shell sort")
     n = len(array)
     gap = n // 2
 
@@ -239,6 +246,7 @@ def shell_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
 def comb_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Bubble sort over a gap shrinking by 1.3, yielding a Snapshot per comparison."""
+    array.set_current_algo("comb sort")
     n = len(array)
     gap = n
     sorted_ = False
@@ -260,6 +268,7 @@ def comb_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
 def cocktail_shaker_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Bubble sort alternating direction, yielding a Snapshot per comparison."""
+    array.set_current_algo("cocktail shaker sort")
     start = 0
     end = len(array) - 1
     swapped = True
@@ -293,6 +302,7 @@ def cocktail_shaker_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
 def gnome_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Insertion sort with a single index, yielding a Snapshot per comparison."""
+    array.set_current_algo("gnome sort")
     n = len(array)
 
     if n < 2:
@@ -312,6 +322,7 @@ def gnome_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
 def odd_even_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Bubble sort by odd then even pairs, yielding a Snapshot per comparison."""
+    array.set_current_algo("odd-even sort")
     n = len(array)
     sorted_ = False
 
@@ -333,6 +344,7 @@ def cycle_sort(array: TrackedArray) -> Iterator[Snapshot]:
     Each element is counted into its final slot and written there once,
     picking up whatever it displaced.
     """
+    array.set_current_algo("cycle sort")
     n = len(array)
 
     for cycle_start in range(n - 1):

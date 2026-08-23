@@ -24,13 +24,17 @@ def tim_sort(array: TrackedArray) -> Iterator[Snapshot]:
     What `list.sort` does, minus natural-run detection and galloping merges.
     """
     n = len(array)
+    array.set_current_algo("tim sort")
 
     for start in range(0, n, _MIN_RUN):
+        array.set_status(f"insertion sort of the run at {start}")
         yield from _insertion_sort_range(array, start, min(start + _MIN_RUN, n) - 1)
 
     size = _MIN_RUN
 
     while size < n:
+        array.set_status(f"merging runs of {size}")
+
         for left in range(0, n, 2 * size):
             mid = min(left + size, n) - 1
             right = min(left + 2 * size, n) - 1
@@ -39,6 +43,8 @@ def tim_sort(array: TrackedArray) -> Iterator[Snapshot]:
                 yield from _merge(array, left, mid, right)
 
         size *= 2
+
+    array.set_status("")
 
     if n > 1:
         yield array.snapshot()
@@ -53,7 +59,9 @@ def intro_sort(array: TrackedArray) -> Iterator[Snapshot]:
     n = len(array)
 
     if n > 1:
+        array.set_current_algo("intro sort")
         yield from _intro_sort(array, 0, n - 1, 2 * (n.bit_length() - 1))
+        array.set_status("")
         yield array.snapshot()
 
 
@@ -63,14 +71,17 @@ def _intro_sort(
     """Sort the closed interval [low, high] of `array` within `depth_limit` splits."""
     while low < high:
         if high - low + 1 <= _INTRO_THRESHOLD:
+            array.set_status(f"insertion sort [{low}:{high}]: short enough")
             yield from _insertion_sort_range(array, low, high)
             return
 
         if depth_limit == 0:
+            array.set_status(f"heap sort [{low}:{high}]: depth limit hit")
             yield from _heap_sort_range(array, low, high)
             return
 
         depth_limit -= 1
+        array.set_status(f"quick sort [{low}:{high}], {depth_limit} splits left")
         pivot = yield from _partition(array, low, high)
         yield from _intro_sort(array, low, pivot - 1, depth_limit)
         # tail call as a loop: the right half is sorted by the next round

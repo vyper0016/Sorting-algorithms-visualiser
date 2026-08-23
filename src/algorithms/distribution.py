@@ -18,6 +18,7 @@ def counting_sort(array: TrackedArray) -> Iterator[Snapshot]:
 
     O(n + k) for k values of spread: cheap for a small spread, ruinous for a large one.
     """
+    array.set_current_algo("counting sort")
     n = len(array)
 
     if n < 2:
@@ -48,6 +49,7 @@ def radix_sort_lsd(array: TrackedArray) -> Iterator[Snapshot]:
     One counting pass per digit, each copying the array out and handing it back
     in bucket order. Stable, so the order won by the lower digits survives.
     """
+    array.set_current_algo("radix sort (LSD)")
     n = len(array)
 
     if n < 2:
@@ -58,10 +60,12 @@ def radix_sort_lsd(array: TrackedArray) -> Iterator[Snapshot]:
 
     try:
         for p in range(passes):
+            array.set_status(f"digit {p + 1} of {passes}, least significant first")
             yield from _lsd_pass(array, _RADIX**p, int(lowest))
 
     finally:
         array.unmark_all()
+        array.set_status("")
 
     yield array.snapshot()
 
@@ -72,6 +76,7 @@ def radix_sort_msd(array: TrackedArray) -> Iterator[Snapshot]:
     Each level buckets its range on one digit in place, then recurses into every
     bucket still holding more than one element.
     """
+    array.set_current_algo("radix sort (MSD)")
     n = len(array)
 
     if n < 2:
@@ -154,6 +159,7 @@ def _msd_sort(
     """
     array.mark(low, _RANGE_END)
     array.mark(high - 1, _RANGE_END)
+    array.set_status(f"digit {depth + 1} of {deepest + 1} on [{low}:{high}]")
 
     base = _RADIX ** (deepest - depth)
     counts = array.buffer(_RADIX)
