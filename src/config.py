@@ -1,5 +1,6 @@
-"""The validated settings objects the two windows write into."""
+"""The validated settings objects the windows write into."""
 
+import re
 from enum import StrEnum
 from typing import Any
 
@@ -87,6 +88,87 @@ class Config(ValidatedSettings):
                 )
             case Distribution.SHUFFLED:
                 return generate_shuffled_array(size, seed=self.seed)
+
+
+_HEX_COLOR = re.compile(r"#?[0-9a-fA-F]{6}\Z")
+_ROW_PADDING = 4
+_HEADER_PADDING = 12
+_COUNTER_FIELDS = (
+    "show_size",
+    "show_reads",
+    "show_writes",
+    "show_comparisons",
+    "show_snapshots",
+    "show_delay",
+    "show_playback",
+)
+
+
+class DisplayConfig(ValidatedSettings):
+    """Validated look of what the window and the export draw."""
+
+    font_size: int = Field(default=18, ge=8, le=64)
+    text_color: str = "#e6e6e6"
+    background_color: str = "#12141c"
+    bar_color: str = "#8fb8de"
+    read_color: str = "#3ddc84"
+    write_color: str = "#ff5555"
+    show_size: bool = True
+    show_reads: bool = True
+    show_writes: bool = True
+    show_comparisons: bool = True
+    show_snapshots: bool = True
+    show_playback: bool = True
+    show_delay: bool = False
+    show_algo: bool = True
+    show_status: bool = True
+
+    @field_validator(
+        "text_color", "background_color", "bar_color", "read_color", "write_color"
+    )
+    @classmethod
+    def _hex_color(cls, code: str) -> str:
+        """Reject anything but six hex digits, handing back a hashed colour.
+
+        >>> DisplayConfig(bar_color="3ddc84").bar_color
+        '#3ddc84'
+        """
+        text = code.strip()
+
+        if _HEX_COLOR.match(text) is None:
+            raise ValueError(f"{text!r} is not a colour like #e6e6e6")
+
+        return text if text.startswith("#") else f"#{text}"
+
+    @property
+    def shows_counters(self) -> bool:
+        """Whether the counter row still carries anything."""
+        return any(getattr(self, field) for field in _COUNTER_FIELDS)
+
+    @property
+    def rows(self) -> int:
+        """How many header rows these settings reserve room for."""
+        return sum((self.shows_counters, self.show_algo, self.show_status))
+
+    @property
+    def line_height(self) -> int:
+        """The vertical step from one header row to the next."""
+        return self.font_size + _ROW_PADDING
+
+    @property
+    def header(self) -> int:
+        """The strip kept clear above the bars, nothing when every row is off.
+
+        >>> DisplayConfig().header
+        78
+        >>> all_off = dict.fromkeys(_COUNTER_FIELDS, False)
+        >>> DisplayConfig(show_algo=False, show_status=False, **all_off).header
+        0
+        """
+        if not self.rows:
+            return 0
+
+        return self.rows * self.line_height + _HEADER_PADDING
 
 
 class FileFormat(StrEnum):

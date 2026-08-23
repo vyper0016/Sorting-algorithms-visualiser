@@ -57,6 +57,7 @@ buttons; the **pygame window** draws the array.
 | Step | Advance one snapshot while paused |
 | Reset | Build a fresh array from the current settings |
 | Export… | Write the run to an MP4 or GIF file |
+| Settings… | Change the font size, the colours, and which labels show |
 
 Every setting applies while a run is in flight: algorithm, starting distribution,
 array size, seed, delay per step, and the volume, sustain and pitch of the sound.
@@ -92,6 +93,8 @@ colour slots, and which list methods are refused.
 | [src/algorithms/](src/algorithms/) | The algorithms, discovered automatically |
 | [src/config.py](src/config.py) | Pydantic settings models |
 | [src/configurator.py](src/configurator.py) | The CustomTkinter settings window |
+| [src/dialogs.py](src/dialogs.py) | The export and display windows it opens |
+| [src/forms.py](src/forms.py) | Widgets bound to a settings model, shared by all three |
 | [src/gui.py](src/gui.py) | The pygame window and the main loop |
 | [src/painter.py](src/painter.py) | Drawing one snapshot |
 | [src/audio.py](src/audio.py) | Tone synthesis |

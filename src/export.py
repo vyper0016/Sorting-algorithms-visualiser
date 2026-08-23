@@ -15,7 +15,7 @@ import pygame
 
 from algorithms import ALGORITHMS
 from audio import PEAK, SAMPLE_RATE, frequency, sounding_value, tone
-from config import Config, ExportConfig, FileFormat
+from config import Config, DisplayConfig, ExportConfig, FileFormat
 from pacing import budget
 from painter import paint, status_font
 from tracked_array import Snapshot
@@ -165,12 +165,14 @@ def _write_frames(
     config: Config,
     options: ExportConfig,
     progress: Progress,
+    display: DisplayConfig | None = None,
 ) -> tuple[list[int | None], int, bool]:
     """Paint the whole run into ffmpeg's stdin."""
     assert process.stdin is not None
     frames, latest, highest = _opening(config)
+    display = display if display is not None else DisplayConfig()
     surface = pygame.Surface(options.size)
-    font = status_font()
+    font = status_font(display.font_size)
     frame_ms = 1000 / options.fps
     limit = options.max_frames
 
@@ -195,14 +197,16 @@ def _write_frames(
             steps += 1
             advanced += 1
 
-        paint(surface, latest, highest, font, steps, "running")
+        paint(
+            surface, latest, highest, font, steps, "running", display, config.delay_ms
+        )
         process.stdin.write(pygame.image.tobytes(surface, "RGB"))
         sounds.append(sounding_value(latest) if advanced else None)
 
         if len(sounds) % options.fps == 0:
             progress(f"rendering frame {len(sounds)} of at most {limit}")
 
-    paint(surface, latest, highest, font, steps, "done!")
+    paint(surface, latest, highest, font, steps, "done!", display, config.delay_ms)
     tail = pygame.image.tobytes(surface, "RGB")
 
     for _ in range(round(_TAIL_SECONDS * options.fps)):
@@ -269,6 +273,7 @@ def render(
     options: ExportConfig,
     path: Path,
     progress: Progress = lambda _message: None,
+    display: DisplayConfig | None = None,
 ) -> ExportResult:
     """Render one run of `config` to `path` and report what came out.
 
@@ -290,7 +295,9 @@ def render(
         process = _start(executable, _video_arguments(options, video), errors)
 
         try:
-            sounds, highest, truncated = _write_frames(process, run, options, progress)
+            sounds, highest, truncated = _write_frames(
+                process, run, options, progress, display
+            )
         except BrokenPipeError:
             _finish(process, errors)
             raise

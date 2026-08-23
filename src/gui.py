@@ -4,7 +4,7 @@ import pygame
 
 from algorithms import ALGORITHMS
 from audio import SAMPLE_RATE, frequency, interleave, sounding_value, tone
-from config import Config
+from config import Config, DisplayConfig
 from configurator import Configurator, Controls
 from pacing import budget
 from painter import paint, status_font
@@ -22,10 +22,16 @@ class GUI:
     """
 
     def __init__(
-        self, width: int, height: int, settings: Config, controls: Controls
+        self,
+        width: int,
+        height: int,
+        settings: Config,
+        controls: Controls,
+        display: DisplayConfig | None = None,
     ) -> None:
         self.settings = settings
         self.controls = controls
+        self.display = display if display is not None else DisplayConfig()
         self._alive = True
         self._highest = 1
         self._finished = False
@@ -40,7 +46,8 @@ class GUI:
 
         self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
         pygame.display.set_caption("Sorting visualiser")
-        self._font = status_font()
+        self._size = self.display.font_size
+        self._font = status_font(self._size)
 
     def _start_mixer(self) -> bool:
 
@@ -92,8 +99,25 @@ class GUI:
         else:
             playback = "running" if self.controls.running else "paused"
 
-        paint(self.screen, snapshot, self._highest, self._font, self._steps, playback)
+        paint(
+            self.screen,
+            snapshot,
+            self._highest,
+            self._current_font(),
+            self._steps,
+            playback,
+            self.display,
+            self.settings.delay_ms,
+        )
         pygame.display.flip()
+
+    def _current_font(self) -> pygame.font.Font:
+        """The header font, rebuilt once whenever its size was changed."""
+        if self._size != self.display.font_size:
+            self._size = self.display.font_size
+            self._font = status_font(self._size)
+
+        return self._font
 
     def play_sound(self, value: int) -> None:
         """Play the tone of `value`, silently doing nothing without a device."""
@@ -130,7 +154,7 @@ class GUI:
 def run(width: int = 960, height: int = 540) -> None:
     """Open both windows and drive them from this loop until either one closes."""
     window = Configurator()
-    gui = GUI(width, height, window.settings, window.controls)
+    gui = GUI(width, height, window.settings, window.controls, window.display_settings)
     settings, controls = window.settings, window.controls
 
     frames: Iterator[Snapshot] = iter(())

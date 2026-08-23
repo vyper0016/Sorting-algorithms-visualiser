@@ -2,39 +2,34 @@
 
 import pygame
 
+from config import DisplayConfig
 from tracked_array import Color, Snapshot, Touch, from_hex
 
-BACKGROUND: Color = from_hex("#12141c")
-BAR: Color = from_hex("#8fb8de")
-READ: Color = from_hex("#3ddc84")
-WRITE: Color = from_hex("#ff5555")
-TEXT: Color = from_hex("#e6e6e6")
-
-HEADER = 72
-STATUS_FONT_SIZE = 18
-LINE_HEIGHT = 22
 _MIN_SPAN_FOR_GAP = 3.0
+_MARGIN = 8
 
 
-def _touch_colors(snapshot: Snapshot) -> dict[int, Color]:
+def _touch_colors(snapshot: Snapshot, display: DisplayConfig) -> dict[int, Color]:
     """The colour of every slot the snapshot singles out.
 
     A write outranks a read on the same slot, and an algorithm's own mark
     outranks both.
 
-    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, touches=((0, Touch.READ),)))
+    >>> look = DisplayConfig()
+    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, touches=((0, Touch.READ),)), look)
     {0: (61, 220, 132)}
     >>> both = ((1, Touch.WRITE), (1, Touch.READ))
-    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, touches=both))
+    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, touches=both), look)
     {1: (255, 85, 85)}
-    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, marks=((0, (9, 9, 9)),)))
+    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, marks=((0, (9, 9, 9)),)), look)
     {0: (9, 9, 9)}
     """
+    read, write = from_hex(display.read_color), from_hex(display.write_color)
     colors: dict[int, Color] = {}
 
     for index, touch in snapshot.touches:
-        if touch is Touch.WRITE or colors.get(index) is not WRITE:
-            colors[index] = WRITE if touch is Touch.WRITE else READ
+        if touch is Touch.WRITE or colors.get(index) != write:
+            colors[index] = write if touch is Touch.WRITE else read
 
     colors.update(snapshot.marks)
     return colors
@@ -53,31 +48,57 @@ def _draw_bars(
     values: tuple[int, ...],
     colors: dict[int, Color],
     highest: int,
+    display: DisplayConfig,
 ) -> None:
     """Draw one bottom aligned bar per value, coloured by its last access."""
     width, height = surface.get_size()
-    chart = height - HEADER
+    chart = height - display.header
+    bar = from_hex(display.bar_color)
 
     for index, value in enumerate(values):
         left, thickness = _column(index, len(values), width)
         share = min(value / highest, 1.0)
-        bar = max(1, round(share * (chart - 2)))
-        rect = pygame.Rect(left, height - bar, thickness, bar)
-        pygame.draw.rect(surface, colors.get(index, BAR), rect)
+        tall = max(1, round(share * (chart - 2)))
+        rect = pygame.Rect(left, height - tall, thickness, tall)
+        pygame.draw.rect(surface, colors.get(index, bar), rect)
 
 
-def _lines(snapshot: Snapshot, counters: str) -> tuple[str, str, str]:
-    """The three header rows, a row empty when it has nothing to say.
+def _counters(
+    snapshot: Snapshot,
+    steps: int,
+    playback: str,
+    delay_ms: float,
+    display: DisplayConfig,
+) -> str:
+    """The counter row, holding only the readings left switched on.
 
-    The rows keep their places, so an algorithm naming itself late does not
-    shove its status line down.
-
-    >>> _lines(Snapshot((1, 2), 0, 0, 0), "n 2")
-    ('n 2', '', '')
-    >>> _lines(Snapshot((1, 2), 0, 0, 0, status="sifting"), "n 2")
-    ('n 2', '', 'sifting')
+    >>> _counters(Snapshot((1, 2), 3, 0, 0), 4, "paused", 50.0, DisplayConfig())
+    'n 2   reads 3   writes 0   comparisons 0   snapshots 4   paused'
     """
-    return counters, snapshot.current_algo, snapshot.status
+    readings = (
+        (display.show_size, f"n {len(snapshot.values)}"),
+        (display.show_reads, f"reads {snapshot.reads}"),
+        (display.show_writes, f"writes {snapshot.writes}"),
+        (display.show_comparisons, f"comparisons {snapshot.comparisons}"),
+        (display.show_snapshots, f"snapshots {steps}"),
+        (display.show_delay, f"delay {delay_ms:g}ms"),
+        (display.show_playback, playback),
+    )
+    return "   ".join(text for shown, text in readings if shown)
+
+
+def _rows(snapshot: Snapshot, counters: str, display: DisplayConfig) -> tuple[str, ...]:
+    """Every header row the settings switch on, in order.
+
+    A row that is on but has nothing to say keeps its place, so an algorithm
+    naming itself late does not shove its status line up.
+    """
+    wanted = (
+        (display.shows_counters, counters),
+        (display.show_algo, snapshot.current_algo),
+        (display.show_status, snapshot.status),
+    )
+    return tuple(text for shown, text in wanted if shown)
 
 
 def _draw_stats(
@@ -86,17 +107,17 @@ def _draw_stats(
     font: pygame.font.Font,
     steps: int,
     playback: str,
+    delay_ms: float,
+    display: DisplayConfig,
 ) -> None:
     """Write the counters of `snapshot`, then each label it carries, one per line."""
-    counters = (
-        f"n {len(snapshot.values)}   reads {snapshot.reads}   "
-        f"writes {snapshot.writes}   comparisons {snapshot.comparisons}   "
-        f"snapshots {steps}   {playback}"
-    )
+    counters = _counters(snapshot, steps, playback, delay_ms, display)
+    color = from_hex(display.text_color)
 
-    for row, line in enumerate(_lines(snapshot, counters)):
+    for row, line in enumerate(_rows(snapshot, counters, display)):
         if line:
-            surface.blit(font.render(line, True, TEXT), (8, 6 + row * LINE_HEIGHT))
+            top = _MARGIN // 2 + row * display.line_height
+            surface.blit(font.render(line, True, color), (_MARGIN, top))
 
 
 def paint(
@@ -106,17 +127,19 @@ def paint(
     font: pygame.font.Font,
     steps: int,
     playback: str,
+    display: DisplayConfig,
+    delay_ms: float = 0.0,
 ) -> None:
-    """Paint `snapshot` as a bar chart with the counter lines above it."""
-    surface.fill(BACKGROUND)
+    """Paint `snapshot` as a bar chart with the header lines above it."""
+    surface.fill(from_hex(display.background_color))
     values = snapshot.values
 
     if values:
-        _draw_bars(surface, values, _touch_colors(snapshot), highest)
+        _draw_bars(surface, values, _touch_colors(snapshot, display), highest, display)
 
-    _draw_stats(surface, snapshot, font, steps, playback)
+    _draw_stats(surface, snapshot, font, steps, playback, delay_ms, display)
 
 
-def status_font() -> pygame.font.Font:
-    """A fresh font for the counter line, so no two threads share one."""
-    return pygame.font.SysFont("consolas", STATUS_FONT_SIZE)
+def status_font(size: int) -> pygame.font.Font:
+    """A fresh font of `size` for the header, so no two threads share one."""
+    return pygame.font.SysFont("consolas", size)
