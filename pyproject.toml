@@ -7,6 +7,7 @@ name = "sorting-visualiser"
 version = "0.1.0"
 description = "Visualiser and audibiliser for sorting algorithms."
 readme = "README.md"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.11"
 dependencies = [
     "icontract",
