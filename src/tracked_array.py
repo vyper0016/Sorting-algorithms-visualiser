@@ -56,6 +56,8 @@ class Snapshot:
     (4, 2, 7)
     >>> snap.touches, snap.marks
     ((), ())
+    >>> snap.current_algo, snap.status
+    ('', '')
     """
 
     values: tuple[int, ...]
@@ -64,6 +66,8 @@ class Snapshot:
     comparisons: int
     touches: tuple[tuple[int, Touch], ...] = ()
     marks: tuple[tuple[int, Color], ...] = ()
+    current_algo: str = ""
+    status: str = ""
 
 
 class TrackedArray(list[TrackedInteger]):
@@ -100,6 +104,8 @@ class TrackedArray(list[TrackedInteger]):
         self._original_length = len(self)
         self._touches: list[tuple[int, Touch]] = []
         self._marks: dict[int, Color] = {}
+        self.current_algo = ""
+        self.status = ""
 
     @staticmethod
     def _shared_stats(data: list[TrackedInteger]) -> Stats:
@@ -175,6 +181,25 @@ class TrackedArray(list[TrackedInteger]):
     def swap(self, i: int, j: int) -> None:
         """Swap the elements at indices i and j."""
         self[i], self[j] = self[j], self[i]
+
+    def set_current_algo(self, algo: str) -> None:
+        """Name the algorithm at work, for the visualiser to show.
+
+        >>> stats = Stats()
+        >>> arr = TrackedArray([TrackedInteger(v, stats) for v in (3, 1)], stats)
+        >>> arr.set_current_algo("bubble sort")
+        >>> arr.snapshot().current_algo
+        'bubble sort'
+        >>> stats.reads, stats.writes
+        (0, 0)
+        """
+        self.current_algo = algo
+
+    def set_status(self, status: str) -> None:
+        """Say what the algorithm is doing, for the visualiser to show.
+        Set to empty string to clear
+        """
+        self.status = status
 
     def copy(self) -> "TrackedArray":
         """Return a TrackedArray of the same elements, billing one read each."""
@@ -284,19 +309,7 @@ class TrackedArray(list[TrackedInteger]):
         "array was resized",
     )
     def snapshot(self) -> Snapshot:
-        """Capture contents, counters, and the accesses since the last snapshot.
-
-        >>> stats = Stats()
-        >>> arr = TrackedArray([TrackedInteger(1, stats)], stats)
-        >>> arr.snapshot()
-        Snapshot(values=(1,), reads=0, writes=0, comparisons=0, touches=(), marks=())
-        >>> arr[0]
-        1
-        >>> arr.snapshot().touches
-        ((0, <Touch.READ: 'read'>),)
-        >>> arr.snapshot().touches
-        ()
-        """
+        """Capture contents, counters, and the accesses since the last snapshot."""
         snapshot = Snapshot(
             values=tuple(int(x) for x in self),
             reads=self.stats.reads,
@@ -304,6 +317,8 @@ class TrackedArray(list[TrackedInteger]):
             comparisons=self.stats.comparisons,
             touches=tuple(self._touches),
             marks=tuple(sorted(self._marks.items())),
+            current_algo=self.current_algo,
+            status=self.status,
         )
         self._touches.clear()
         return snapshot

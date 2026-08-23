@@ -88,11 +88,11 @@ class GUI:
     def draw(self, snapshot: Snapshot) -> None:
         """Paint `snapshot` onto the window."""
         if self._finished:
-            status = "done!"
+            playback = "done!"
         else:
-            status = "running" if self.controls.running else "paused"
+            playback = "running" if self.controls.running else "paused"
 
-        paint(self.screen, snapshot, self._highest, self._font, self._steps, status)
+        paint(self.screen, snapshot, self._highest, self._font, self._steps, playback)
         pygame.display.flip()
 
     def play_sound(self, value: int) -> None:

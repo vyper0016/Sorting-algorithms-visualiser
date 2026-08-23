@@ -15,6 +15,7 @@ def sorting_algorithm(array: TrackedArray) -> Iterator[Snapshot]: ...
 | Any container works | Takes a `TrackedArray`, so `[]`, `[] =` and `swap` count reads/writes |
 | Free to allocate scratch lists | Takes scratch from `array.buffer(n)`, so that work still counts |
 | Free to build new values | Must end with the **same elements** it was given |
+| Explains itself in comments | Can label the frame with `mark`, `set_current_algo`, `set_status` |
 
 - **Yield frames, don't return.** One `yield array.snapshot()` = one frame.
   `snapshot()` is O(n): yield per comparison/swap, not per element touched.
@@ -38,6 +39,12 @@ def sorting_algorithm(array: TrackedArray) -> Iterator[Snapshot]: ...
   on the way out — a `finally` around the yields catches the visualiser closing
   the generator mid-run — and yield one last frame afterwards, or the finished
   array stays coloured.
+- **Say what you are doing.** Optional. `array.set_current_algo("quicksort")` and
+  `array.set_status(f"partition [{lo}:{hi}]")` fill the two label lines the
+  visualiser prints under the counters. Both take a plain string, cost nothing,
+  and hold until set again. The snapshot carries them, so a frame shows the
+  labels that were set when it was taken, not the ones set later. Set neither and
+  both lines stay blank — an algorithm that says nothing looks as it always did.
 - **Write back only elements you took out.** `append`, `extend`, `insert`,
   `pop`, `remove`, `clear`, `del arr[i]`, `arr += ...`, `arr *= ...` and a
   length-changing slice assignment raise `TypeError` where you call them — an

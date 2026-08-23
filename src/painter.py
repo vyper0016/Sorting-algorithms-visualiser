@@ -10,8 +10,9 @@ READ: Color = from_hex("#3ddc84")
 WRITE: Color = from_hex("#ff5555")
 TEXT: Color = from_hex("#e6e6e6")
 
-HEADER = 28
+HEADER = 72
 STATUS_FONT_SIZE = 18
+LINE_HEIGHT = 22
 _MIN_SPAN_FOR_GAP = 3.0
 
 
@@ -65,20 +66,37 @@ def _draw_bars(
         pygame.draw.rect(surface, colors.get(index, BAR), rect)
 
 
+def _lines(snapshot: Snapshot, counters: str) -> tuple[str, str, str]:
+    """The three header rows, a row empty when it has nothing to say.
+
+    The rows keep their places, so an algorithm naming itself late does not
+    shove its status line down.
+
+    >>> _lines(Snapshot((1, 2), 0, 0, 0), "n 2")
+    ('n 2', '', '')
+    >>> _lines(Snapshot((1, 2), 0, 0, 0, status="sifting"), "n 2")
+    ('n 2', '', 'sifting')
+    """
+    return counters, snapshot.current_algo, snapshot.status
+
+
 def _draw_stats(
     surface: pygame.Surface,
     snapshot: Snapshot,
     font: pygame.font.Font,
     steps: int,
-    status: str,
+    playback: str,
 ) -> None:
-    """Write the counters of `snapshot` across the top of the surface."""
-    line = (
+    """Write the counters of `snapshot`, then each label it carries, one per line."""
+    counters = (
         f"n {len(snapshot.values)}   reads {snapshot.reads}   "
         f"writes {snapshot.writes}   comparisons {snapshot.comparisons}   "
-        f"snapshots {steps}   {status}"
+        f"snapshots {steps}   {playback}"
     )
-    surface.blit(font.render(line, True, TEXT), (8, 6))
+
+    for row, line in enumerate(_lines(snapshot, counters)):
+        if line:
+            surface.blit(font.render(line, True, TEXT), (8, 6 + row * LINE_HEIGHT))
 
 
 def paint(
@@ -87,16 +105,16 @@ def paint(
     highest: int,
     font: pygame.font.Font,
     steps: int,
-    status: str,
+    playback: str,
 ) -> None:
-    """Paint `snapshot` as a bar chart with a line of counters above it."""
+    """Paint `snapshot` as a bar chart with the counter lines above it."""
     surface.fill(BACKGROUND)
     values = snapshot.values
 
     if values:
         _draw_bars(surface, values, _touch_colors(snapshot), highest)
 
-    _draw_stats(surface, snapshot, font, steps, status)
+    _draw_stats(surface, snapshot, font, steps, playback)
 
 
 def status_font() -> pygame.font.Font:
