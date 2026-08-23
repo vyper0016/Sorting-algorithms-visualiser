@@ -18,7 +18,6 @@ def bubble_sort(array: TrackedArray) -> Iterator[Snapshot]:
         swapped = False
 
         for j in range(0, n - i - 1):
-
             if array[j] > array[j + 1]:
                 array.swap(j, j + 1)
                 swapped = True
@@ -225,7 +224,6 @@ def shell_sort(array: TrackedArray) -> Iterator[Snapshot]:
     gap = n // 2
 
     while gap > 0:
-
         for i in range(gap, n):
             j = i
 
@@ -253,7 +251,6 @@ def comb_sort(array: TrackedArray) -> Iterator[Snapshot]:
             sorted_ = True
 
         for i in range(n - gap):
-
             if array[i] > array[i + gap]:
                 array.swap(i, i + gap)
                 sorted_ = False
@@ -271,7 +268,6 @@ def cocktail_shaker_sort(array: TrackedArray) -> Iterator[Snapshot]:
         swapped = False
 
         for i in range(start, end):
-
             if array[i] > array[i + 1]:
                 array.swap(i, i + 1)
                 swapped = True
@@ -286,7 +282,6 @@ def cocktail_shaker_sort(array: TrackedArray) -> Iterator[Snapshot]:
         swapped = False
 
         for i in range(end, start, -1):
-
             if array[i - 1] > array[i]:
                 array.swap(i - 1, i)
                 swapped = True
@@ -306,7 +301,6 @@ def gnome_sort(array: TrackedArray) -> Iterator[Snapshot]:
     position = 1
 
     while position < n:
-
         if array[position - 1] <= array[position]:
             position += 1
         else:
@@ -325,9 +319,7 @@ def odd_even_sort(array: TrackedArray) -> Iterator[Snapshot]:
         sorted_ = True
 
         for parity in (1, 0):
-
             for i in range(parity, n - 1, 2):
-
                 if array[i] > array[i + 1]:
                     array.swap(i, i + 1)
                     sorted_ = False
@@ -370,7 +362,6 @@ def _destination(
     position = cycle_start
 
     for i in range(cycle_start + 1, len(array)):
-
         if array[i] < item:
             position += 1
 

@@ -41,7 +41,6 @@ def discover_algorithms() -> dict[str, SortingAlgorithm]:
         module = importlib.import_module(f"{__name__}.{module_info.name}")
 
         for name, function in inspect.getmembers(module, inspect.isgeneratorfunction):
-
             if not name.startswith("_") and function.__module__ == module.__name__:
                 found[name] = function
 

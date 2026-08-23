@@ -1,7 +1,7 @@
 # Sorting algorithms visualiser
 
-A desktop application that draws a sorting algorithm as a bar chart while it runs,
-and plays the value it touches as a tone — a Python take on
+Visualise sorting algorithms with sound.
+A Python take on
 [The Sound of Sorting](https://panthema.net/2013/sound-of-sorting/).
 
 The algorithms sort a `TrackedArray`, a list-like class that counts every read,

@@ -363,7 +363,6 @@ class TestRejectedMutation:
 
 
 class TestSnapshotValidation:
-
     def test_resize_detected_at_snapshot(self, stats):
         arr = make_array([1, 2, 3], stats)
         list.append(arr, TrackedInteger(4, stats))
@@ -412,7 +411,6 @@ class TestBuffer:
 
 
 class TestSnapshotDoesNotDisturbStats:
-
     def test_counters_unchanged_after_activity(self, stats):
         arr = make_array([3, 1, 2], stats)
         arr.swap(0, 2)

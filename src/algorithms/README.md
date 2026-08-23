@@ -66,7 +66,7 @@ collects each public generator function it defines into `ALGORITHMS`, keyed by
 function name:
 
 ```python
-from algorithms import ALGORITHMS   # {"bubble_sort": <function bubble_sort>, ...}
+from algorithms import ALGORITHMS  # {"bubble_sort": <function bubble_sort>, ...}
 ```
 
 Drop the function into `sorts.py` or a new module beside it and the visualiser
@@ -82,6 +82,7 @@ Decorate with `@untested` from [`algorithms`](__init__.py) to exclude from test 
 
 ```python
 from algorithms import untested
+
 
 @untested
 def bogo_sort(array: TrackedArray) -> Iterator[Snapshot]: ...
@@ -118,5 +119,5 @@ Drive it by exhausting the generator:
 
 ```python
 arr = generate_random_array(10)
-frames = list(bubble_sort(arr))   # or `for frame in ...` to draw each one
+frames = list(bubble_sort(arr))  # or `for frame in ...` to draw each one
 ```

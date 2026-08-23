@@ -66,7 +66,6 @@ class GUI:
         The run itself is driven from the settings window alone.
         """
         for event in pygame.event.get():
-
             if event.type == pygame.QUIT:
                 self._alive = False
 

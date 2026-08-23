@@ -21,14 +21,12 @@ def pancake_sort(array: TrackedArray) -> Iterator[Snapshot]:
         largest = 0
 
         for i in range(1, size):
-
             if array[i] > array[largest]:
                 largest = i
 
             yield array.snapshot()
 
         if largest != size - 1:
-
             if largest != 0:
                 yield from _flip(array, largest)
 

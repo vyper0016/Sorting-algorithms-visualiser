@@ -34,7 +34,6 @@ def counting_sort(array: TrackedArray) -> Iterator[Snapshot]:
     write = 0
 
     for slot in range(len(counts)):
-
         for _ in range(int(counts[slot])):
             array[write] = lowest + slot
             write += 1
@@ -58,7 +57,6 @@ def radix_sort_lsd(array: TrackedArray) -> Iterator[Snapshot]:
     passes = _lsd_passes(int(highest - lowest))
 
     try:
-
         for p in range(passes):
             yield from _lsd_pass(array, _RADIX**p, int(lowest))
 
@@ -215,7 +213,6 @@ def _msd_permute(
     i = 0
 
     while i < high - low:
-
         while True:
             digit = _digit(array[low + i], lowest, base)
             buckets[digit] = buckets[digit] - 1

@@ -31,7 +31,6 @@ def tim_sort(array: TrackedArray) -> Iterator[Snapshot]:
     size = _MIN_RUN
 
     while size < n:
-
         for left in range(0, n, 2 * size):
             mid = min(left + size, n) - 1
             right = min(left + 2 * size, n) - 1
@@ -63,7 +62,6 @@ def _intro_sort(
 ) -> Iterator[Snapshot]:
     """Sort the closed interval [low, high] of `array` within `depth_limit` splits."""
     while low < high:
-
         if high - low + 1 <= _INTRO_THRESHOLD:
             yield from _insertion_sort_range(array, low, high)
             return
