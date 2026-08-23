@@ -7,9 +7,7 @@ A Python take on [The Sound of Sorting](https://panthema.net/2013/sound-of-sorti
 
 ![Gnome sort, n = 39](demo/gnome_sort.gif)
 
-<video src="demo/merge_sort.mp4" controls muted loop width="720"></video>
-
-<video src="demo/tim_sort_n_546.mp4" controls muted loop width="720"></video>
+[Merge sort (mp4)](demo/merge_sort.mp4) · [Tim sort, n = 546 (mp4)](demo/tim_sort_n_546.mp4)
 
 ## Features
 
