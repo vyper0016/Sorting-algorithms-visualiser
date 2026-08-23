@@ -6,6 +6,7 @@ A Python take on [The Sound of Sorting](https://panthema.net/2013/sound-of-sorti
 ## Demo
 
 ![Gnome sort, n = 39](demo/gnome_sort.gif)
+![Intro sort](demo/intro_sort.gif)
 
 [Merge sort (mp4)](demo/merge_sort.mp4) · [Tim sort, n = 546 (mp4)](demo/tim_sort_n_546.mp4)
 
