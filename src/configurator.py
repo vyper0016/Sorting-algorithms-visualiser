@@ -231,7 +231,9 @@ class Configurator(ctk.CTk, FieldForm[Config]):  # type: ignore[misc]
             self._settings_dialog.focus()
             return
 
-        self._settings_dialog = SettingsDialog(self, self.display_settings)
+        self._settings_dialog = SettingsDialog(
+            self, self.display_settings, self.settings, self._refresh
+        )
 
     def _start_export(self) -> None:
         """Ask for a file name, then render the run to it in the background."""

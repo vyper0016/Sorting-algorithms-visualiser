@@ -18,7 +18,7 @@ from tracked_array import TrackedArray
 class ValidatedSettings(BaseModel):
     """Settings that validate every assignment, so a form can bind straight to them."""
 
-    model_config = ConfigDict(validate_assignment=True)
+    model_config = ConfigDict(validate_assignment=True, extra="forbid")
 
     def update_fields(self, **changes: Any) -> None:
         """Apply `changes` in one step, or raise ValidationError and change nothing."""
@@ -36,18 +36,23 @@ class Distribution(StrEnum):
     SHUFFLED = "shuffled"
 
 
-class Config(ValidatedSettings):
+class SoundConfig(ValidatedSettings):
+    """Validated settings of the tones a run makes."""
+
+    delay_ms: float = Field(default=50.0, ge=0.0, le=2000.0)
+    volume: float = Field(default=0.3, ge=0.0, le=1.0)
+    sustain_ms: float = Field(default=80.0, ge=1.0, le=1000.0)
+    pitch: float = Field(default=1.0, ge=0.01, le=8.0)
+
+
+class Config(SoundConfig):
     """Validated settings of one visualisation run."""
 
     algorithm: str = "bubble_sort"
     distribution: Distribution = Distribution.SHUFFLED
     array_size: int = Field(default=2**6, ge=2, le=2**11)
     seed: int | None = None
-    delay_ms: float = Field(default=50.0, ge=0.0, le=2000.0)
     sound_enabled: bool = True
-    volume: float = Field(default=0.3, ge=0.0, le=1.0)
-    sustain_ms: float = Field(default=80.0, ge=1.0, le=1000.0)
-    pitch: float = Field(default=1.0, ge=0.01, le=8.0)
 
     @field_validator("algorithm")
     @classmethod
@@ -169,6 +174,45 @@ class DisplayConfig(ValidatedSettings):
             return 0
 
         return self.rows * self.line_height + _HEADER_PADDING
+
+
+class SettingsProfile(ValidatedSettings):
+    """The display and sound settings one settings file carries."""
+
+    display: DisplayConfig = Field(default_factory=DisplayConfig)
+    sound: SoundConfig = Field(default_factory=SoundConfig)
+
+    @classmethod
+    def capture(cls, display: DisplayConfig, sound: SoundConfig) -> "SettingsProfile":
+        """The profile `display` and the sound part of `sound` currently hold.
+
+        >>> profile = SettingsProfile.capture(
+        ...     DisplayConfig(font_size=24), Config(pitch=2.0)
+        ... )
+        >>> profile.display.font_size, profile.sound.pitch
+        (24, 2.0)
+        """
+        return cls(
+            display=DisplayConfig.model_validate(display.model_dump()),
+            sound=SoundConfig.model_validate(
+                {field: getattr(sound, field) for field in SoundConfig.model_fields}
+            ),
+        )
+
+    def apply_to(self, display: DisplayConfig, sound: SoundConfig) -> None:
+        """Write this profile back into the settings the windows are bound to.
+
+        >>> settings, look = Config(), DisplayConfig()
+        >>> SettingsProfile.model_validate_json(
+        ...     SettingsProfile.capture(
+        ...         DisplayConfig(bar_color="#000000"), Config(volume=0.9)
+        ...     ).model_dump_json()
+        ... ).apply_to(look, settings)
+        >>> look.bar_color, settings.volume, settings.algorithm
+        ('#000000', 0.9, 'bubble_sort')
+        """
+        display.update_fields(**self.display.model_dump())
+        sound.update_fields(**self.sound.model_dump())
 
 
 class FileFormat(StrEnum):

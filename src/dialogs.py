@@ -1,9 +1,12 @@
 """The two windows the configurator opens beside itself."""
 
 from collections.abc import Callable
+from pathlib import Path
+from tkinter import filedialog
 from typing import Any
 
 import customtkinter as ctk
+from pydantic import ValidationError
 
 from config import (
     MAX_HEIGHT,
@@ -13,8 +16,12 @@ from config import (
     DisplayConfig,
     ExportConfig,
     FileFormat,
+    SettingsProfile,
+    SoundConfig,
 )
 from forms import FieldForm, button_row
+
+_JSON_FILES = [("JSON file", "*.json"), ("All files", "*.*")]
 
 _COLORS = (
     ("Font colour", "text_color"),
@@ -31,6 +38,21 @@ _LABEL_SWITCHES = (
     ("Playback", "show_playback", "Algorithm", "show_algo"),
     ("Algorithm status", "show_status", "", ""),
 )
+
+
+def _describe(error: ValidationError) -> str:
+    """The first complaint in `error`, named by the setting it came from.
+
+    >>> try:
+    ...     SettingsProfile.model_validate({"display": {"font_size": 2}})
+    ... except ValidationError as error:
+    ...     _describe(error)
+    'display.font_size: Input should be greater than or equal to 8'
+    """
+    first = error.errors()[0]
+    field = ".".join(str(part) for part in first["loc"])
+    message = first["msg"].removeprefix("Value error, ")
+    return f"{field}: {message}" if field else message
 
 
 class ExportDialog(ctk.CTkToplevel, FieldForm[ExportConfig]):  # type: ignore[misc]
@@ -110,12 +132,20 @@ class SettingsDialog(ctk.CTkToplevel, FieldForm[DisplayConfig]):  # type: ignore
     What it writes is read again by the next painted frame, so no restart.
     """
 
-    def __init__(self, master: ctk.CTk, settings: DisplayConfig) -> None:
+    def __init__(
+        self,
+        master: ctk.CTk,
+        settings: DisplayConfig,
+        sound: SoundConfig,
+        on_import: Callable[[], None],
+    ) -> None:
         super().__init__(master)
         self.settings = settings
+        self.sound = sound
+        self._on_import = on_import
 
         self.title("Display settings")
-        self.geometry("370x420")
+        self.geometry("370x455")
         self.grid_columnconfigure(1, weight=1)
 
         self._init_form()
@@ -150,9 +180,63 @@ class SettingsDialog(ctk.CTkToplevel, FieldForm[DisplayConfig]):  # type: ignore
         )
 
         row += 1
+        transfer = button_row(self, row, pady=(0, 4))
+        ctk.CTkButton(transfer, text="Export…", command=self._export).grid(
+            row=0, column=0, sticky="ew", padx=4
+        )
+        ctk.CTkButton(transfer, text="Import…", command=self._import).grid(
+            row=0, column=1, sticky="ew", padx=4
+        )
+
+        row += 1
         self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
 
     def _restore(self) -> None:
         """Put every setting back the way it started."""
         self._apply(DisplayConfig().model_dump())
         self._refresh()
+
+    def _export(self) -> None:
+        """Ask for a file name and write these settings to it as JSON."""
+        chosen = filedialog.asksaveasfilename(
+            parent=self, defaultextension=".json", filetypes=_JSON_FILES
+        )
+
+        if not chosen:
+            return
+
+        profile = SettingsProfile.capture(self.settings, self.sound)
+
+        try:
+            Path(chosen).write_text(profile.model_dump_json(indent=2), encoding="utf-8")
+        except OSError as error:
+            self._report(f"could not save: {error.strerror or error}")
+            return
+
+        self._report(f"saved to {Path(chosen).name}", error=False)
+
+    def _import(self) -> None:
+        """Read a settings file back, leaving everything as it was if it is bad."""
+        chosen = filedialog.askopenfilename(parent=self, filetypes=_JSON_FILES)
+
+        if not chosen:
+            return
+
+        try:
+            profile = SettingsProfile.model_validate_json(
+                Path(chosen).read_text(encoding="utf-8")
+            )
+        except OSError as error:
+            self._report(f"could not read: {error.strerror or error}")
+            return
+        except UnicodeDecodeError:
+            self._report("that file is not text")
+            return
+        except ValidationError as error:
+            self._report(_describe(error))
+            return
+
+        profile.apply_to(self.settings, self.sound)
+        self._refresh()
+        self._on_import()
+        self._report(f"loaded {Path(chosen).name}", error=False)
