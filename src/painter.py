@@ -7,6 +7,7 @@ from tracked_array import Color, Snapshot, Touch, from_hex
 
 _MIN_SPAN_FOR_GAP = 3.0
 _MARGIN = 8
+_MONOSPACE = "consolas,dejavusansmono,liberationmono,couriernew,monospace"
 
 
 def _touch_colors(snapshot: Snapshot, display: DisplayConfig) -> dict[int, Color]:
@@ -141,5 +142,5 @@ def paint(
 
 
 def status_font(size: int) -> pygame.font.Font:
-    """A fresh font of `size` for the header, so no two threads share one."""
-    return pygame.font.SysFont("consolas", size)
+    """A fresh monospaced font of `size`, so no two threads share one."""
+    return pygame.font.SysFont(_MONOSPACE, size)
