@@ -1,23 +1,35 @@
+import threading
 import tkinter as tk
 from collections.abc import Callable
 from dataclasses import dataclass
-from enum import StrEnum
-from typing import Any
+from pathlib import Path
+from tkinter import filedialog
+from typing import Any, Generic, TypeVar
 
 import customtkinter as ctk
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+import pygame
+from pydantic import ValidationError
 
 from algorithms import ALGORITHMS
-from generator import (
-    generate_random_array,
-    generate_range_array,
-    generate_shuffled_array,
+from config import (
+    MAX_HEIGHT,
+    MAX_WIDTH,
+    MIN_HEIGHT,
+    MIN_WIDTH,
+    Config,
+    Distribution,
+    ExportConfig,
+    FileFormat,
+    ValidatedSettings,
+    parse_seed,
 )
-from tracked_array import TrackedArray
+from export import ExportError, render
 
 _ERROR_COLOR = "#ff5555"
 _LABEL_GRID: dict[str, Any] = {"sticky": "w", "padx": 8, "pady": 4}
 _MAX_STEPS = 2000
+
+Settings = TypeVar("Settings", bound=ValidatedSettings)
 
 
 def _step_count(low: float, high: float, steps: int | None, integer: bool) -> int:
@@ -31,83 +43,6 @@ def _step_count(low: float, high: float, steps: int | None, integer: bool) -> in
         return max(1, round(span))
 
     return max(1, min(round(span * 100), _MAX_STEPS))
-
-
-class Distribution(StrEnum):
-    """The shape of the array a run starts from.
-
-    The values of every distribution span roughly the array's own length, so a
-    bar chart of one looks like a bar chart of any other. RANDOM_DISTINCT draws
-    from twice that range, which is what keeps it from being a permutation of
-    0..n-1 like SHUFFLED.
-    """
-
-    ASCENDING = "ascending"
-    DESCENDING = "descending"
-    RANDOM = "random"
-    RANDOM_DISTINCT = "random distinct"
-    SHUFFLED = "shuffled"
-
-
-class Config(BaseModel):
-    """Validated settings of one visualisation run."""
-
-    model_config = ConfigDict(validate_assignment=True)
-
-    algorithm: str = "bubble_sort"
-    distribution: Distribution = Distribution.SHUFFLED
-    array_size: int = Field(default=2**6, ge=2, le=2**11)
-    seed: int | None = None
-    delay_ms: float = Field(default=50.0, ge=0.0, le=2000.0)
-    sound_enabled: bool = True
-    volume: float = Field(default=0.3, ge=0.0, le=1.0)
-    sustain_ms: float = Field(default=80.0, ge=1.0, le=1000.0)
-    pitch: float = Field(default=1.0, ge=0.01, le=1.8)
-
-    @field_validator("algorithm")
-    @classmethod
-    def _known_algorithm(cls, name: str) -> str:
-        """Reject a name that the algorithms package does not offer."""
-        if name not in ALGORITHMS:
-            raise ValueError(f"unknown algorithm {name!r}")
-
-        return name
-
-    def update_fields(self, **changes: Any) -> None:
-        """Apply `changes` in one step, or raise ValidationError and change nothing."""
-        validated = self.model_validate({**self.model_dump(), **changes})
-        self.__dict__.update(validated.__dict__)
-
-    def build_array(self) -> TrackedArray:
-        """A freshly generated array for these settings.
-
-        >>> Config(array_size=5, distribution="ascending").build_array()
-        [0, 1, 2, 3, 4]
-        >>> Config(array_size=5, distribution="descending").build_array()
-        [4, 3, 2, 1, 0]
-        >>> sorted(Config(array_size=5, distribution="shuffled").build_array())
-        [0, 1, 2, 3, 4]
-        >>> values = Config(array_size=6, distribution="random distinct").build_array()
-        >>> len(values) == len(set(values))
-        True
-        >>> len(Config(array_size=6, distribution="random").build_array())
-        6
-        """
-        size = self.array_size
-
-        match self.distribution:
-            case Distribution.ASCENDING:
-                return generate_range_array(size)
-            case Distribution.DESCENDING:
-                return generate_range_array(size - 1, -1, -1)
-            case Distribution.RANDOM:
-                return generate_random_array(size, 0, size - 1, seed=self.seed)
-            case Distribution.RANDOM_DISTINCT:
-                return generate_random_array(
-                    size, 0, 2 * size - 1, distinct=True, seed=self.seed
-                )
-            case Distribution.SHUFFLED:
-                return generate_shuffled_array(size, seed=self.seed)
 
 
 @dataclass
@@ -158,6 +93,12 @@ class Controls:
         return True
 
 
+def _visualiser_size() -> tuple[int, int] | None:
+    """The size the visualiser window is showing at, or None when it is closed."""
+    surface = pygame.display.get_surface()
+    return surface.get_size() if surface is not None else None
+
+
 def _first_message(error: ValidationError) -> str:
     """The first complaint in `error`, without pydantic's preamble.
 
@@ -171,99 +112,23 @@ def _first_message(error: ValidationError) -> str:
     return message.removeprefix("Value error, ")
 
 
-def _parse_seed(text: str) -> int | None:
-    """The seed an entry holds, where blank means a fresh random one.
+class _FieldForm(Generic[Settings]):
+    """Widgets bound to the fields of one ValidatedSettings object.
 
-    >>> _parse_seed(" 42 ")
-    42
-    >>> _parse_seed("   ") is None
-    True
-    """
-    stripped = text.strip()
-    return int(stripped) if stripped else None
-
-
-class Configurator(ctk.CTk):  # type: ignore[misc]
-    """The settings window, a second top level window beside the pygame one.
-
-    It is driven by `pump()` from the pygame frame loop rather than by `mainloop()`
+    Both windows are built from these, so a value the model refuses is
+    reported and reverted the same way wherever it was typed.
     """
 
-    def __init__(
-        self, settings: Config | None = None, controls: Controls | None = None
-    ) -> None:
-        super().__init__()
-        self.settings = settings if settings is not None else Config()
-        self.controls = controls if controls is not None else Controls()
+    settings: Settings
 
-        self._alive = True
+    def _init_form(self) -> None:
+        """Prepare the widget bookkeeping and the status line."""
         self._setters: dict[str, Callable[[Any], None]] = {}
         self._entries: dict[str, ctk.CTkEntry] = {}
-
-        self.title("Sorting visualiser")
-        self.geometry("470x370")
-        self.grid_columnconfigure(1, weight=1)
-
         self._status = ctk.CTkLabel(self, text="", anchor="w")
-        self._build_widgets()
-        self._refresh()
-
-        self.protocol("WM_DELETE_WINDOW", self.close)
-
-    def _build_widgets(self) -> None:
-        """Lay out every control, top to bottom."""
-        row = 0
-        self._add_menu(row, "Algorithm", "algorithm", list(ALGORITHMS))
-
-        row += 1
-        self._add_menu(row, "Array", "distribution", [d.value for d in Distribution])
-
-        row += 1
-        self._add_slider(
-            row, "Array size", "array_size", 2, 2**11, reset=True, editable=True
-        )
-
-        row += 1
-        self._add_entry(row, "Seed (blank: random)", "seed", self._apply_seed)
-
-        row += 1
-        self._add_slider(
-            row, "Delay (ms)", "delay_ms", 0, 2000, integer=False, editable=True
-        )
-
-        row += 1
-        self._add_switch(row, "Sound", "sound_enabled")
-
-        row += 1
-        self._add_slider(row, "Volume", "volume", 0, 1, steps=20, integer=False)
-
-        row += 1
-        self._add_slider(row, "Sustain (ms)", "sustain_ms", 1, 1000, integer=False)
-
-        row += 1
-        self._add_slider(row, "Pitch", "pitch", 0.01, 1.8, integer=False)
-
-        row += 1
-        buttons = ctk.CTkFrame(self, fg_color="transparent")
-        buttons.grid(row=row, column=0, columnspan=3, sticky="ew", padx=4, pady=(12, 4))
-        buttons.grid_columnconfigure((0, 1, 2), weight=1)
-
-        self._toggle_button = ctk.CTkButton(
-            buttons, text="Start", command=self._on_toggle
-        )
-        self._toggle_button.grid(row=0, column=0, sticky="ew", padx=4)
-        ctk.CTkButton(buttons, text="Step", command=self._on_step).grid(
-            row=0, column=1, sticky="ew", padx=4
-        )
-        ctk.CTkButton(buttons, text="Reset", command=self._on_reset).grid(
-            row=0, column=2, sticky="ew", padx=4
-        )
-
-        row += 1
-        self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
 
     def _add_menu(self, row: int, label: str, field: str, choices: list[str]) -> None:
-        """Add a labelled drop down writing `field`, which always resets the run."""
+        """Add a labelled drop down writing `field`."""
         ctk.CTkLabel(self, text=label).grid(row=row, column=0, **_LABEL_GRID)
         menu = ctk.CTkOptionMenu(
             self,
@@ -360,7 +225,7 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         self._setters[field] = show
         self._entries[field] = entry
 
-    def _add_switch(self, row: int, label: str, field: str) -> None:
+    def _add_switch(self, row: int, label: str, field: str) -> ctk.CTkSwitch:
         """Add a switch writing the boolean `field`."""
         switch = ctk.CTkSwitch(self, text=label)
         switch.configure(command=lambda: self._apply({field: bool(switch.get())}))
@@ -373,6 +238,7 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
                 switch.deselect()
 
         self._setters[field] = show
+        return switch
 
     def _apply(self, changes: dict[str, Any], reset: bool = False) -> None:
         """Write `changes` to the settings, or report them and revert the widgets."""
@@ -384,14 +250,194 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
             return
 
         self._report("")
+        self._after_apply(changes, reset)
 
+    def _after_apply(self, changes: dict[str, Any], reset: bool) -> None:
+        """React to settings that were just accepted."""
+
+    def _refresh(self) -> None:
+        """Push every settings field back into its widget."""
+        for field, setter in self._setters.items():
+            setter(getattr(self.settings, field))
+
+    def _report(self, message: str, error: bool = True) -> None:
+        """Show `message` in the status line, an empty one clearing it."""
+        normal = ("gray10", "gray90")
+        self._status.configure(
+            text=message, text_color=_ERROR_COLOR if message and error else normal
+        )
+
+
+class ExportDialog(ctk.CTkToplevel, _FieldForm[ExportConfig]):  # type: ignore[misc]
+    """The second settings window, opened by the configurator's Export button."""
+
+    def __init__(
+        self, master: ctk.CTk, settings: ExportConfig, on_save: Callable[[], None]
+    ) -> None:
+        super().__init__(master)
+        self.settings = settings
+        self._on_save = on_save
+
+        self.title("Export a run")
+        self.geometry("420x300")
+        self.grid_columnconfigure(1, weight=1)
+
+        self._init_form()
+        self._build_widgets()
+        self._refresh()
+
+        self.transient(master)
+
+    def _build_widgets(self) -> None:
+        """Lay out every control, top to bottom."""
+        row = 0
+        self._add_menu(row, "Format", "file_format", [f.value for f in FileFormat])
+
+        row += 1
+        self._add_slider(row, "Width", "width", MIN_WIDTH, MAX_WIDTH, editable=True)
+
+        row += 1
+        self._add_slider(row, "Height", "height", MIN_HEIGHT, MAX_HEIGHT, editable=True)
+
+        row += 1
+        self._add_slider(row, "Frames per second", "fps", 5, 60)
+
+        row += 1
+        self._add_slider(row, "Max length (min)", "max_minutes", 0.1, 10, integer=False)
+
+        row += 1
+        self._sound = self._add_switch(row, "Sound", "sound_enabled")
+
+        row += 1
+        buttons = ctk.CTkFrame(self, fg_color="transparent")
+        buttons.grid(row=row, column=0, columnspan=3, sticky="ew", padx=4, pady=(12, 4))
+        buttons.grid_columnconfigure((0, 1), weight=1)
+
+        ctk.CTkButton(buttons, text="Save…", command=self._save).grid(
+            row=0, column=0, sticky="ew", padx=4
+        )
+        ctk.CTkButton(buttons, text="Cancel", command=self.destroy).grid(
+            row=0, column=1, sticky="ew", padx=4
+        )
+
+        row += 1
+        self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
+
+    def _after_apply(self, changes: dict[str, Any], reset: bool) -> None:
+        """Grey the sound switch out for a GIF, which carries no audio."""
+        self._sound.configure(
+            state=(
+                "normal" if self.settings.file_format is FileFormat.MP4 else "disabled"
+            )
+        )
+
+    def _refresh(self) -> None:
+        """Push every field back into its widget, the sound switch included."""
+        super()._refresh()
+        self._after_apply({}, False)
+
+    def _save(self) -> None:
+        """Hand the settings back to the configurator and close."""
+        self.destroy()
+        self._on_save()
+
+
+class Configurator(ctk.CTk, _FieldForm[Config]):  # type: ignore[misc]
+    """The settings window, a second top level window beside the pygame one.
+
+    It is driven by `pump()` from the pygame frame loop rather than by `mainloop()`
+    """
+
+    def __init__(
+        self, settings: Config | None = None, controls: Controls | None = None
+    ) -> None:
+        super().__init__()
+        self.settings = settings if settings is not None else Config()
+        self.controls = controls if controls is not None else Controls()
+        self.export_settings = ExportConfig()
+
+        self._alive = True
+        self._dialog: ExportDialog | None = None
+        self._worker: threading.Thread | None = None
+        self._progress = ""
+        self._shown = ""
+
+        self.title("Sorting visualiser")
+        self.geometry("470x400")
+        self.grid_columnconfigure(1, weight=1)
+
+        self._init_form()
+        self._build_widgets()
+        self._refresh()
+
+        self.protocol("WM_DELETE_WINDOW", self.close)
+
+    def _build_widgets(self) -> None:
+        """Lay out every control, top to bottom."""
+        row = 0
+        self._add_menu(row, "Algorithm", "algorithm", list(ALGORITHMS))
+
+        row += 1
+        self._add_menu(row, "Array", "distribution", [d.value for d in Distribution])
+
+        row += 1
+        self._add_slider(
+            row, "Array size", "array_size", 2, 2**11, reset=True, editable=True
+        )
+
+        row += 1
+        self._add_entry(row, "Seed (blank: random)", "seed", self._apply_seed)
+
+        row += 1
+        self._add_slider(
+            row, "Delay (ms)", "delay_ms", 0, 2000, integer=False, editable=True
+        )
+
+        row += 1
+        self._add_switch(row, "Sound", "sound_enabled")
+
+        row += 1
+        self._add_slider(row, "Volume", "volume", 0, 1, steps=20, integer=False)
+
+        row += 1
+        self._add_slider(
+            row, "Sustain (ms)", "sustain_ms", 1, 1000, integer=False, editable=True
+        )
+
+        row += 1
+        self._add_slider(row, "Pitch", "pitch", 0.01, 8, integer=False, editable=True)
+
+        row += 1
+        buttons = ctk.CTkFrame(self, fg_color="transparent")
+        buttons.grid(row=row, column=0, columnspan=3, sticky="ew", padx=4, pady=(12, 4))
+        buttons.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        self._toggle_button = ctk.CTkButton(
+            buttons, text="Start", command=self._on_toggle
+        )
+        self._toggle_button.grid(row=0, column=0, sticky="ew", padx=4)
+        ctk.CTkButton(buttons, text="Step", command=self._on_step).grid(
+            row=0, column=1, sticky="ew", padx=4
+        )
+        ctk.CTkButton(buttons, text="Reset", command=self._on_reset).grid(
+            row=0, column=2, sticky="ew", padx=4
+        )
+        ctk.CTkButton(buttons, text="Export…", command=self._on_export).grid(
+            row=0, column=3, sticky="ew", padx=4
+        )
+
+        row += 1
+        self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
+
+    def _after_apply(self, changes: dict[str, Any], reset: bool) -> None:
+        """Start the run over when the changed setting shaped the array."""
         if reset:
             self.controls.request_reset()
 
     def _apply_seed(self) -> None:
         """Commit the seed entry, where blank means a fresh random array."""
         try:
-            seed = _parse_seed(self._entries["seed"].get())
+            seed = parse_seed(self._entries["seed"].get())
         except ValueError:
             self._report("seed must be a whole number or blank")
             self._refresh()
@@ -401,9 +447,7 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
 
     def _refresh(self) -> None:
         """Push every settings field back into its widget."""
-        for field, setter in self._setters.items():
-            setter(getattr(self.settings, field))
-
+        super()._refresh()
         self.sync()
 
     def sync(self) -> None:
@@ -413,12 +457,6 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         """
         self._toggle_button.configure(
             text="Pause" if self.controls.running else "Start"
-        )
-
-    def _report(self, message: str) -> None:
-        """Show `message` in the status line, an empty one clearing it."""
-        self._status.configure(
-            text=message, text_color=_ERROR_COLOR if message else ("gray10", "gray90")
         )
 
     def _on_toggle(self) -> None:
@@ -436,9 +474,55 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         self.controls.request_reset()
         self._report("")
 
-    def get_config(self) -> Config:
-        """The live settings object, shared with the visualiser."""
-        return self.settings
+    def _on_export(self) -> None:
+        """Open the export settings window, or raise the one already open."""
+        if self._worker is not None and self._worker.is_alive():
+            self._report("an export is already running")
+            return
+
+        if self._dialog is not None and self._dialog.winfo_exists():
+            self._dialog.focus()
+            return
+
+        size = _visualiser_size()
+
+        if size is not None:
+            self.export_settings.match(*size)
+
+        self._dialog = ExportDialog(self, self.export_settings, self._start_export)
+
+    def _start_export(self) -> None:
+        """Ask for a file name, then render the run to it in the background."""
+        suffix = f".{self.export_settings.file_format.value}"
+        chosen = filedialog.asksaveasfilename(
+            parent=self,
+            defaultextension=suffix,
+            filetypes=[(f"{suffix[1:].upper()} file", f"*{suffix}")],
+        )
+
+        if not chosen:
+            return
+
+        config = Config.model_validate(self.settings.model_dump())
+        options = ExportConfig.model_validate(self.export_settings.model_dump())
+        self._progress = "starting the export"
+        self._worker = threading.Thread(
+            target=self._export, args=(config, options, Path(chosen)), daemon=True
+        )
+        self._worker.start()
+
+    def _export(self, config: Config, options: ExportConfig, path: Path) -> None:
+        """Render one export, reporting through the status line as it goes."""
+        try:
+            result = render(config, options, path, self._note)
+        except (ExportError, OSError) as error:
+            self._note(f"export failed: {' '.join(str(error).splitlines())}")
+        else:
+            self._note(result.describe())
+
+    def _note(self, message: str) -> None:
+        """Leave `message` for `pump` to show, called from the worker thread."""
+        self._progress = message
 
     def pump(self) -> bool:
         """Serve pending Tk events once, False once the window is gone.
@@ -447,6 +531,10 @@ class Configurator(ctk.CTk):  # type: ignore[misc]
         """
         if not self._alive:
             return False
+
+        if self._progress != self._shown:
+            self._shown = self._progress
+            self._report(self._progress, error=self._progress.startswith("export"))
 
         try:
             self.update()

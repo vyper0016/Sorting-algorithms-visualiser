@@ -2,7 +2,13 @@
 name = "Sorting algorithms visualiser"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["icontract", "customtkinter", "pydantic", "pygame"]
+dependencies = [
+    "icontract",
+    "customtkinter",
+    "pydantic",
+    "pygame",
+    "imageio-ffmpeg",
+]
 
 [project.optional-dependencies]
 dev = ["pytest", "black", "ruff", "mypy", "pre-commit", "fawltydeps", "interrogate"]
@@ -24,6 +30,10 @@ explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = "customtkinter"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "imageio_ffmpeg"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -53,8 +63,13 @@ code = ["src", "tests"]
 deps = ["pyproject.toml"]
 ignore_undeclared = [
     "algorithms",
+    "audio",
+    "config",
     "configurator",
+    "export",
     "generator",
+    "pacing",
+    "painter",
     "stats",
     "tracked_array",
     "tracked_integer",

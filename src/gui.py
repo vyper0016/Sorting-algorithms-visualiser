@@ -1,132 +1,17 @@
-import math
-import struct
 from collections.abc import Iterator
 
 import pygame
 
 from algorithms import ALGORITHMS
-from configurator import Config, Configurator, Controls
-from tracked_array import Color, Snapshot, Touch, from_hex
+from audio import SAMPLE_RATE, frequency, interleave, sounding_value, tone
+from config import Config
+from configurator import Configurator, Controls
+from pacing import budget
+from painter import paint, status_font
+from tracked_array import Snapshot
 
-_BACKGROUND: Color = from_hex("#12141c")
-_BAR: Color = from_hex("#8fb8de")
-_READ: Color = from_hex("#3ddc84")
-_WRITE: Color = from_hex("#ff5555")
-_TEXT: Color = from_hex("#e6e6e6")
-
-_HEADER = 28
-_STATUS_FONT_SIZE = 18
-_MIN_SPAN_FOR_GAP = 3.0
 _FPS = 60
-_MAX_STEPS_PER_FRAME = 512
-
-# sound constants
-_SAMPLE_RATE = 44100
 _CHANNELS = 16
-_MIN_FREQUENCY = 100.0
-_MAX_FREQUENCY = 1100.0
-_AMPLITUDE = 0.6
-
-
-def _frequency(value: int, highest: int, pitch: float = 1.0) -> float:
-    """The pitch of `value`, small bars deep and tall bars bright.
-
-    >>> [_frequency(v, 10) for v in (0, 5, 10)]
-    [100.0, 600.0, 1100.0]
-    >>> _frequency(3, 0)
-    100.0
-    >>> _frequency(10, 10, 2.0)
-    2200.0
-    """
-    if highest <= 0:
-        return _MIN_FREQUENCY * pitch
-
-    share = min(max(value / highest, 0.0), 1.0)
-    return (_MIN_FREQUENCY + share * (_MAX_FREQUENCY - _MIN_FREQUENCY)) * pitch
-
-
-def _tone(frequency: float, duration_ms: float) -> bytes:
-    """One mono 16 bit sine burst, faded in and out so it does not click.
-
-    >>> len(_tone(440.0, 10.0))
-    882
-    >>> _tone(440.0, 10.0)[:2]
-    b'\\x00\\x00'
-    >>> _tone(440.0, 0.0)
-    b''
-    """
-    samples = int(_SAMPLE_RATE * duration_ms / 1000)
-    fade = max(1, samples // 8)
-    step = 2 * math.pi * frequency / _SAMPLE_RATE
-    peak = 32767 * _AMPLITUDE
-    frames = [
-        int(peak * min(i, samples - 1 - i, fade) / fade * math.sin(step * i))
-        for i in range(samples)
-    ]
-    return struct.pack(f"<{samples}h", *frames)
-
-
-def _touch_colors(snapshot: Snapshot) -> dict[int, Color]:
-    """The colour of every slot the snapshot singles out.
-
-    A write outranks a read on the same slot, and an algorithm's own mark
-    outranks both.
-
-    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, touches=((0, Touch.READ),)))
-    {0: (61, 220, 132)}
-    >>> both = ((1, Touch.WRITE), (1, Touch.READ))
-    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, touches=both))
-    {1: (255, 85, 85)}
-    >>> _touch_colors(Snapshot((1, 2), 0, 0, 0, marks=((0, (9, 9, 9)),)))
-    {0: (9, 9, 9)}
-    """
-    colors: dict[int, Color] = {}
-
-    for index, touch in snapshot.touches:
-        if touch is Touch.WRITE or colors.get(index) is not _WRITE:
-            colors[index] = _WRITE if touch is Touch.WRITE else _READ
-
-    colors.update(snapshot.marks)
-    return colors
-
-
-def _sounding_value(snapshot: Snapshot) -> int | None:
-    """The value of the slot touched last, or None when nothing was touched.
-
-    >>> _sounding_value(Snapshot((5, 7), 0, 0, 0, touches=((1, Touch.WRITE),)))
-    7
-    >>> _sounding_value(Snapshot((5, 7), 0, 0, 0)) is None
-    True
-    """
-    if not snapshot.touches:
-        return None
-
-    index, _touch = snapshot.touches[-1]
-    return snapshot.values[index]
-
-
-def _column(index: int, count: int, width: int) -> tuple[int, int]:
-    """The left edge and the thickness of bar `index`, in pixels."""
-    span = width / count
-    left = min(round(index * span), width - 1)
-    gap = 1 if span >= _MIN_SPAN_FOR_GAP else 0
-    return left, max(1, min(round((index + 1) * span), width) - left - gap)
-
-
-def _budget(overdue: float, delay_ms: float, running: bool) -> tuple[int, float]:
-    """The frames to take now, and the waiting time left over afterwards."""
-    if not running:
-        return 0, 0.0
-
-    if delay_ms <= 0:
-        return _MAX_STEPS_PER_FRAME, 0.0
-
-    steps = min(int(overdue // delay_ms), _MAX_STEPS_PER_FRAME)
-
-    if steps == _MAX_STEPS_PER_FRAME:
-        return steps, 0.0
-
-    return steps, overdue - steps * delay_ms
 
 
 class GUI:
@@ -147,23 +32,31 @@ class GUI:
         self._steps = 0
         self._tones: dict[int, pygame.mixer.Sound] = {}
         self._voice = (settings.sustain_ms, settings.pitch)
+        self._channels = 1
 
-        pygame.mixer.pre_init(_SAMPLE_RATE, -16, 1, 512)
+        pygame.mixer.pre_init(SAMPLE_RATE, -16, 1, 512)
         pygame.init()
         self._audio = self._start_mixer()
 
         self.screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
         pygame.display.set_caption("Sorting visualiser")
-        self._font = pygame.font.SysFont("consolas", _STATUS_FONT_SIZE)
+        self._font = status_font()
 
-    @staticmethod
-    def _start_mixer() -> bool:
-        """Whether the machine gave us an audio device to play through."""
+    def _start_mixer(self) -> bool:
+
+        if pygame.mixer.get_init() is not None:
+            pygame.mixer.quit()
+
         try:
-            pygame.mixer.init()
+            pygame.mixer.init(SAMPLE_RATE, -16, 1, 512, allowedchanges=0)
         except pygame.error:
-            return False
+            try:
+                pygame.mixer.init()
+            except pygame.error:
+                return False
 
+        opened = pygame.mixer.get_init()
+        self._channels = opened[2] if opened else 1
         pygame.mixer.set_num_channels(_CHANNELS)
         return True
 
@@ -194,41 +87,14 @@ class GUI:
         self._finished = True
 
     def draw(self, snapshot: Snapshot) -> None:
-        """Paint `snapshot` as a bar chart with a line of counters above it."""
-        self.screen.fill(_BACKGROUND)
-        values = snapshot.values
-
-        if values:
-            self._draw_bars(values, _touch_colors(snapshot))
-
-        self._draw_stats(snapshot)
-        pygame.display.flip()
-
-    def _draw_bars(self, values: tuple[int, ...], colors: dict[int, Color]) -> None:
-        """Draw one bottom aligned bar per value, coloured by its last access."""
-        width, height = self.screen.get_size()
-        chart = height - _HEADER
-
-        for index, value in enumerate(values):
-            left, thickness = _column(index, len(values), width)
-            share = min(value / self._highest, 1.0)
-            bar = max(1, round(share * (chart - 2)))
-            rect = pygame.Rect(left, height - bar, thickness, bar)
-            pygame.draw.rect(self.screen, colors.get(index, _BAR), rect)
-
-    def _draw_stats(self, snapshot: Snapshot) -> None:
-        """Write the counters of `snapshot` across the top of the window."""
+        """Paint `snapshot` onto the window."""
         if self._finished:
             status = "done!"
         else:
             status = "running" if self.controls.running else "paused"
 
-        line = (
-            f"n {len(snapshot.values)}   reads {snapshot.reads}   "
-            f"writes {snapshot.writes}   comparisons {snapshot.comparisons}   "
-            f"snapshots {self._steps}   {status}"
-        )
-        self.screen.blit(self._font.render(line, True, _TEXT), (8, 6))
+        paint(self.screen, snapshot, self._highest, self._font, self._steps, status)
+        pygame.display.flip()
 
     def play_sound(self, value: int) -> None:
         """Play the tone of `value`, silently doing nothing without a device."""
@@ -248,10 +114,11 @@ class GUI:
             self._voice = voice
 
         sustain, pitch = voice
-        hertz = round(_frequency(value, self._highest, pitch))
+        hertz = round(frequency(value, self._highest, pitch))
 
         if hertz not in self._tones:
-            self._tones[hertz] = pygame.mixer.Sound(buffer=_tone(hertz, sustain))
+            burst = interleave(tone(hertz, sustain), self._channels)
+            self._tones[hertz] = pygame.mixer.Sound(buffer=burst)
 
         return self._tones[hertz]
 
@@ -283,7 +150,7 @@ def run(width: int = 960, height: int = 540) -> None:
             gui.begin(latest)
             overdue = 0.0
 
-        steps, overdue = _budget(overdue, settings.delay_ms, controls.running)
+        steps, overdue = budget(overdue, settings.delay_ms, controls.running)
 
         if controls.consume_step():
             steps = max(steps, 1)
@@ -301,7 +168,7 @@ def run(width: int = 960, height: int = 540) -> None:
 
         if latest is not None:
             gui.draw(latest)
-            value = _sounding_value(latest)
+            value = sounding_value(latest)
 
             if value is not None and steps:
                 gui.play_sound(value)
