@@ -1,6 +1,12 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "Sorting algorithms visualiser"
+name = "sorting-visualiser"
 version = "0.1.0"
+description = "Visualiser and audibiliser for sorting algorithms."
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "icontract",
@@ -11,11 +17,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "black", "ruff", "mypy", "pre-commit", "fawltydeps", "interrogate"]
+dev = ["pytest", "ruff", "mypy", "pre-commit", "fawltydeps", "interrogate"]
 
-[tool.black]
-line-length = 88
-target-version = ["py311"]
+[project.scripts]
+sortvis = "gui:run"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["algorithms"]
+py-modules = [
+    "audio",
+    "config",
+    "configurator",
+    "export",
+    "generator",
+    "gui",
+    "pacing",
+    "painter",
+    "stats",
+    "tracked_array",
+    "tracked_integer",
+]
 
 [tool.ruff]
 line-length = 88
@@ -76,7 +98,6 @@ ignore_undeclared = [
 ]
 ignore_unused = [
     "customtkinter",
-    "black",
     "ruff",
     "mypy",
     "pre-commit",
