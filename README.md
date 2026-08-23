@@ -8,6 +8,42 @@ The algorithms sort a `TrackedArray`, a list-like class that counts every read,
 write and comparison, so the picture and the counters come from the algorithm
 itself rather than from a separate trace.
 
+## Demo
+
+Bars are coloured by their last access: green a read, red a write, anything else
+a mark the algorithm set. The header line holds the live counters.
+
+![Gnome sort, n = 39](demo/gnome_sort.gif)
+
+<video src="demo/merge_sort.mp4" controls muted loop width="720"></video>
+
+<video src="demo/tim_sort_n_546.mp4" controls muted loop width="720"></video>
+
+All three came out of the **Export…** button. The MP4s carry the sound track —
+[merge sort, `n = 64`](demo/merge_sort.mp4) and
+[tim sort, `n = 546`](demo/tim_sort_n_546.mp4); GIF exports are silent.
+
+## Features
+
+* 22 algorithms, from `bubble_sort` to `tim_sort`, `radix_sort_msd` and
+  `bogo_sort` — discovered by name, so a new module needs no registration
+* Reads, writes and comparisons counted by the array itself, shown live
+* Five starting distributions, a seed for a repeatable run, sizes up to 2048
+* One tone per snapshot, with volume, sustain and pitch to hand
+* Every setting applies mid-run; Pydantic reports a bad value in the window
+* MP4 and GIF export, and display profiles saved to JSON
+* The settings windows follow the system light or dark theme; the bars keep
+  the colours set in **Settings…**
+
+![The configurator](demo/configurator.png)
+
+The settings and the transport buttons. Start / Pause runs the algorithm, Step
+advances one snapshot, Reset builds a fresh array.
+
+| ![Export a run](demo/export_dialog.png) | ![Display settings](demo/display_settings.png) |
+| --- | --- |
+| **Export…** — format, size, frame rate and a length cap | **Settings…** — colours, font size, and which labels show |
+
 ## Requirements
 
 * Python 3.11 or newer
@@ -48,21 +84,8 @@ python src/gui.py
 
 On Windows, double-clicking `src/main.pyw` starts it without a console window.
 
-Two windows open. The **configurator** holds the settings and the transport
-buttons; the **pygame window** draws the array.
-
-| Button | Effect |
-| --- | --- |
-| Start / Pause | Run or hold the algorithm |
-| Step | Advance one snapshot while paused |
-| Reset | Build a fresh array from the current settings |
-| Export… | Write the run to an MP4 or GIF file |
-| Settings… | Change the font size, the colours, and which labels show |
-
-Every setting applies while a run is in flight: algorithm, starting distribution,
-array size, seed, delay per step, and the volume, sustain and pitch of the sound.
-Values are validated by Pydantic, so an out-of-range entry is reported in the
-window instead of crashing the program.
+Two windows open: the **configurator** shown above, and the pygame window that
+draws the array.
 
 ## Writing your own algorithm
 
@@ -100,6 +123,7 @@ colour slots, and which list methods are refused.
 | [src/audio.py](src/audio.py) | Tone synthesis |
 | [src/export.py](src/export.py) | MP4 and GIF rendering |
 | [tests/](tests/) | pytest suite; doctests live in the modules |
+| [demo/](demo/) | The clips and screenshots shown above |
 
 ## Development
 
