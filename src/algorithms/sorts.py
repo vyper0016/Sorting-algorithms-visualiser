@@ -55,6 +55,7 @@ def merge_sort(array: TrackedArray) -> Iterator[Snapshot]:
     """Sort `array` ascending in place, yielding a Snapshot per element moved."""
     array.set_current_algo("merge sort")
     yield from _merge_sort(array, 0, len(array) - 1)
+    array.set_status("")
 
     if len(array) > 1:
         yield array.snapshot()
@@ -66,6 +67,7 @@ def _merge_sort(array: TrackedArray, left: int, right: int) -> Iterator[Snapshot
         mid = (left + right) // 2
         yield from _merge_sort(array, left, mid)
         yield from _merge_sort(array, mid + 1, right)
+        array.set_status(f"merging [{left}:{mid}] and [{mid + 1}:{right}]")
         yield from _merge(array, left, mid, right)
 
 
