@@ -4,8 +4,8 @@ import icontract
 import pytest
 
 from algorithms import TESTABLE_ALGORITHMS
-from stats import Stats
-from tracked_array import DEFAULT_MARK_COLOR, Snapshot, Touch, TrackedArray, from_hex
+from metrics import DEFAULT_MARK_COLOR, Snapshot, Stats, Touch, from_hex
+from tracked_array import TrackedArray
 from tracked_integer import TrackedInteger
 
 

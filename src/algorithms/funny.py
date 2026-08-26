@@ -4,7 +4,8 @@ import random
 from collections.abc import Iterator
 
 from algorithms import untested
-from tracked_array import Color, Snapshot, TrackedArray, from_hex
+from metrics import Color, Snapshot, from_hex
+from tracked_array import TrackedArray
 
 _FLIP_END: Color = from_hex("#f9844a")
 

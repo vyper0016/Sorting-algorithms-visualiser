@@ -9,7 +9,8 @@ from algorithms.sorts import (
     _partition,
     _sift_down,
 )
-from tracked_array import Snapshot, TrackedArray
+from metrics import Snapshot
+from tracked_array import TrackedArray
 
 # CPython picks a run length in [32, 64]; the visualiser sorts fewer elements
 # than that, so a shorter run keeps the merge half of the algorithm visible.

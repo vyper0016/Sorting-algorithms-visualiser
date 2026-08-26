@@ -16,9 +16,9 @@ import pygame
 from algorithms import ALGORITHMS
 from audio import PEAK, SAMPLE_RATE, frequency, sounding_value, tone
 from config import Config, DisplayConfig, ExportConfig, FileFormat
+from metrics import Snapshot
 from pacing import budget
 from painter import paint, status_font
-from tracked_array import Snapshot
 
 _TAIL_SECONDS = 1.0
 _GIF_FILTER = "[0:v] split [a][b];[a] palettegen [p];[b][p] paletteuse"

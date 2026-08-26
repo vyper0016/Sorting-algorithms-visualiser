@@ -4,7 +4,7 @@ import array
 import math
 import struct
 
-from tracked_array import Snapshot
+from metrics import Snapshot
 
 SAMPLE_RATE = 44100
 MIN_FREQUENCY = 100.0

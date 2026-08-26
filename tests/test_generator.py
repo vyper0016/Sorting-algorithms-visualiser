@@ -6,7 +6,7 @@ from generator import (
     generate_range_array,
     generate_shuffled_array,
 )
-from stats import Stats
+from metrics import Stats
 from tracked_array import TrackedArray
 
 

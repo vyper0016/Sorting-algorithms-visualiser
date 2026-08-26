@@ -1,6 +1,6 @@
 import logging
 
-from stats import Stats
+from metrics import Stats
 
 logger = logging.getLogger(__name__)
 

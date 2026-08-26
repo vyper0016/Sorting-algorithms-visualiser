@@ -35,9 +35,9 @@ py-modules = [
     "forms",
     "generator",
     "gui",
+    "metrics",
     "pacing",
     "painter",
-    "stats",
     "tracked_array",
     "tracked_integer",
 ]
@@ -95,9 +95,9 @@ ignore_undeclared = [
     "export",
     "forms",
     "generator",
+    "metrics",
     "pacing",
     "painter",
-    "stats",
     "tracked_array",
     "tracked_integer",
 ]

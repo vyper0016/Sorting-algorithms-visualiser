@@ -1,6 +1,7 @@
 from collections.abc import Generator, Iterator
 
-from tracked_array import Color, Snapshot, TrackedArray, from_hex
+from metrics import Color, Snapshot, from_hex
+from tracked_array import TrackedArray
 from tracked_integer import TrackedInteger
 
 _RUN_END: Color = from_hex("#ffd166")

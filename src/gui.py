@@ -6,9 +6,9 @@ from algorithms import ALGORITHMS
 from audio import SAMPLE_RATE, frequency, interleave, sounding_value, tone
 from config import Config, DisplayConfig
 from configurator import Configurator, Controls
+from metrics import Snapshot
 from pacing import budget
 from painter import paint, status_font
-from tracked_array import Snapshot
 
 _FPS = 60
 _CHANNELS = 16

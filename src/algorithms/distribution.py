@@ -2,7 +2,8 @@
 
 from collections.abc import Generator, Iterator
 
-from tracked_array import Color, Snapshot, TrackedArray, from_hex
+from metrics import Color, Snapshot, from_hex
+from tracked_array import TrackedArray
 from tracked_integer import TrackedInteger
 
 # the radix sorts follow Timo Bingmann's sound-of-sorting, which buckets on

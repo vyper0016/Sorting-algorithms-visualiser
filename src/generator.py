@@ -2,7 +2,7 @@ import random
 
 import icontract
 
-from stats import Stats
+from metrics import Stats
 from tracked_array import TrackedArray
 from tracked_integer import TrackedInteger
 

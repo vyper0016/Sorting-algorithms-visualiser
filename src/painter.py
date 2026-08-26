@@ -3,7 +3,7 @@
 import pygame
 
 from config import DisplayConfig
-from tracked_array import Color, Snapshot, Touch, from_hex
+from metrics import Color, Snapshot, Touch, from_hex
 
 _MIN_SPAN_FOR_GAP = 3.0
 _MARGIN = 8

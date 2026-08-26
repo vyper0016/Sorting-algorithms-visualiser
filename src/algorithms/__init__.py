@@ -15,7 +15,8 @@ import pkgutil
 from collections.abc import Callable, Iterator
 from typing import TypeVar
 
-from tracked_array import Snapshot, TrackedArray
+from metrics import Snapshot
+from tracked_array import TrackedArray
 
 SortingAlgorithm = Callable[[TrackedArray], Iterator[Snapshot]]
 
