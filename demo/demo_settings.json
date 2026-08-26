@@ -1,0 +1,25 @@
+{
+  "display": {
+    "font_size": 18,
+    "text_color": "#e6e6e6",
+    "background_color": "#11131a",
+    "bar_color": "#b0cde8",
+    "read_color": "#3ddc84",
+    "write_color": "#ff5555",
+    "show_size": true,
+    "show_reads": true,
+    "show_writes": true,
+    "show_comparisons": true,
+    "show_snapshots": true,
+    "show_playback": true,
+    "show_delay": true,
+    "show_algo": true,
+    "show_status": true
+  },
+  "sound": {
+    "delay_ms": 50.0,
+    "volume": 0.2,
+    "sustain_ms": 80.0,
+    "pitch": 0.62
+  }
+}
