@@ -285,9 +285,16 @@ class Configurator(ctk.CTk, FieldForm[Config]):  # type: ignore[misc]
         if not self._alive:
             return False
 
-        if self._progress != self._shown:
-            self._shown = self._progress
-            self._report(self._progress, error=self._progress.startswith("export"))
+        if self._dialog is not None and self._dialog.winfo_exists():
+            self._dialog.set_running(
+                self._worker is not None and self._worker.is_alive()
+            )
+
+            if self._progress != self._shown:
+                self._shown = self._progress
+                self._dialog.show_progress(
+                    self._progress, error=self._progress.startswith("export")
+                )
 
         try:
             self.update()

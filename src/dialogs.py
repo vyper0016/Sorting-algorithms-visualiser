@@ -66,12 +66,13 @@ class ExportDialog(ctk.CTkToplevel, FieldForm[ExportConfig]):  # type: ignore[mi
         self._on_save = on_save
 
         self.title("Export a run")
-        self.geometry("420x260")
+        self.geometry("420x300")
         self.grid_columnconfigure(1, weight=1)
 
         self._init_form()
         self._build_widgets()
         self._refresh()
+        self._report("exporter standby", error=False)
 
         self.transient(master)
 
@@ -97,9 +98,8 @@ class ExportDialog(ctk.CTkToplevel, FieldForm[ExportConfig]):  # type: ignore[mi
 
         row += 1
         buttons = button_row(self, row)
-        ctk.CTkButton(buttons, text="Save…", command=self._save).grid(
-            row=0, column=0, sticky="ew", padx=4
-        )
+        self._save_button = ctk.CTkButton(buttons, text="Save…", command=self._save)
+        self._save_button.grid(row=0, column=0, sticky="ew", padx=4)
         ctk.CTkButton(buttons, text="Cancel", command=self.destroy).grid(
             row=0, column=1, sticky="ew", padx=4
         )
@@ -121,9 +121,16 @@ class ExportDialog(ctk.CTkToplevel, FieldForm[ExportConfig]):  # type: ignore[mi
         self._after_apply({}, False)
 
     def _save(self) -> None:
-        """Hand the settings back to the configurator and close."""
-        self.destroy()
+        """Hand the settings to the configurator, staying open to show progress."""
         self._on_save()
+
+    def show_progress(self, message: str, error: bool = False) -> None:
+        """Post one export status update, as pushed by the configurator's worker."""
+        self._report(message, error=error)
+
+    def set_running(self, running: bool) -> None:
+        """Grey the Save button out while an export is under way."""
+        self._save_button.configure(state="disabled" if running else "normal")
 
 
 class SettingsDialog(ctk.CTkToplevel, FieldForm[DisplayConfig]):  # type: ignore[misc]
