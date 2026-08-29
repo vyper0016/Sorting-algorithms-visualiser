@@ -92,6 +92,7 @@ class Configurator(ctk.CTk, FieldForm[Config]):  # type: ignore[misc]
         self._worker: threading.Thread | None = None
         self._progress = ""
         self._shown = ""
+        self._done: Path | None = None
 
         self.title("Sorting visualiser")
         self.geometry("470x400")
@@ -161,7 +162,7 @@ class Configurator(ctk.CTk, FieldForm[Config]):  # type: ignore[misc]
         )
 
         row += 1
-        self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
+        self._grid_status(row)
 
     def _after_apply(self, changes: dict[str, Any], reset: bool) -> None:
         """Start the run over when the changed setting shaped the array."""
@@ -251,6 +252,7 @@ class Configurator(ctk.CTk, FieldForm[Config]):  # type: ignore[misc]
         options = ExportConfig.model_validate(self.export_settings.model_dump())
         display = DisplayConfig.model_validate(self.display_settings.model_dump())
         self._progress = "starting the export"
+        self._done = None
         self._worker = threading.Thread(
             target=self._export,
             args=(config, options, display, Path(chosen)),
@@ -271,6 +273,7 @@ class Configurator(ctk.CTk, FieldForm[Config]):  # type: ignore[misc]
         except (ExportError, OSError) as error:
             self._note(f"export failed: {' '.join(str(error).splitlines())}")
         else:
+            self._done = result.path
             self._note(result.describe())
 
     def _note(self, message: str) -> None:
@@ -293,7 +296,9 @@ class Configurator(ctk.CTk, FieldForm[Config]):  # type: ignore[misc]
             if self._progress != self._shown:
                 self._shown = self._progress
                 self._dialog.show_progress(
-                    self._progress, error=self._progress.startswith("export")
+                    self._progress,
+                    error=self._progress.startswith("export"),
+                    path=self._done,
                 )
 
         try:

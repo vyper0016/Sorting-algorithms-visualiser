@@ -1,7 +1,11 @@
 """The widget layer every settings window is built from."""
 
+import os
+import subprocess
+import sys
 import tkinter as tk
 from collections.abc import Callable
+from pathlib import Path
 from tkinter import colorchooser
 from typing import Any, Generic, TypeVar, cast
 
@@ -11,6 +15,7 @@ from pydantic import ValidationError
 from config import ValidatedSettings
 
 _ERROR_COLOR = "#ff5555"
+_LINK_COLOR = ("#1f6aa5", "#6cb2eb")
 _LABEL_GRID: dict[str, Any] = {"sticky": "w", "padx": 8, "pady": 4}
 _MAX_STEPS = 2000
 
@@ -38,6 +43,16 @@ def button_row(
     frame.grid(row=row, column=0, columnspan=3, sticky="ew", padx=4, pady=pady)
     frame.grid_columnconfigure(tuple(range(columns)), weight=1)
     return frame
+
+
+def _open_file(path: Path) -> None:
+    """Hand `path` to whatever the desktop opens that kind of file with."""
+    if sys.platform == "win32":
+        os.startfile(path)
+        return
+
+    opener = "open" if sys.platform == "darwin" else "xdg-open"
+    subprocess.run([opener, str(path)], check=True)
 
 
 def _first_message(error: ValidationError) -> str:
@@ -68,6 +83,39 @@ class FieldForm(Generic[Settings]):
         self._setters: dict[str, Callable[[Any], None]] = {}
         self._entries: dict[str, ctk.CTkEntry] = {}
         self._status = ctk.CTkLabel(self, text="", anchor="w")
+        self._target: Path | None = None
+        self._link = ctk.CTkLabel(
+            self,
+            text="Open",
+            anchor="e",
+            cursor="hand2",
+            text_color=_LINK_COLOR,
+            font=ctk.CTkFont(underline=True),
+        )
+        self._link.bind("<Button-1>", lambda _event: self._open_target())
+
+    def _grid_status(self, row: int) -> None:
+        """Put the status line, and the Open link it can offer, on `row`."""
+        self._status.grid(row=row, column=0, columnspan=2, sticky="ew", padx=8, pady=8)
+        self._link.grid(row=row, column=2, sticky="e", padx=8, pady=8)
+        self._link.grid_remove()
+
+    def _offer_open(self, path: Path) -> None:
+        """Offer `path` beside the status line, as a link that opens it."""
+        self._target = path
+        self._link.grid()
+
+    def _open_target(self) -> None:
+        """Open the file the link points at, reporting a refusal in its place."""
+        if self._target is None:
+            return
+
+        try:
+            _open_file(self._target)
+        except OSError as error:
+            self._report(f"could not open: {error.strerror or error}")
+        except subprocess.SubprocessError as error:
+            self._report(f"could not open: {error}")
 
     def _on_commit(self, entry: ctk.CTkEntry, commit: Callable[[], None]) -> None:
         """Run `commit` on Return and on focus loss."""
@@ -263,6 +311,7 @@ class FieldForm(Generic[Settings]):
 
     def _report(self, message: str, error: bool = True) -> None:
         """Show `message` in the status line, an empty one clearing it."""
+        self._link.grid_remove()
         normal = ("gray10", "gray90")
         self._status.configure(
             text=message, text_color=_ERROR_COLOR if message and error else normal

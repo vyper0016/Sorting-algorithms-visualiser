@@ -105,7 +105,7 @@ class ExportDialog(ctk.CTkToplevel, FieldForm[ExportConfig]):  # type: ignore[mi
         )
 
         row += 1
-        self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
+        self._grid_status(row)
 
     def _after_apply(self, changes: dict[str, Any], reset: bool) -> None:
         """Grey the sound switch out for a GIF, which carries no audio."""
@@ -124,9 +124,17 @@ class ExportDialog(ctk.CTkToplevel, FieldForm[ExportConfig]):  # type: ignore[mi
         """Hand the settings to the configurator, staying open to show progress."""
         self._on_save()
 
-    def show_progress(self, message: str, error: bool = False) -> None:
-        """Post one export status update, as pushed by the configurator's worker."""
+    def show_progress(
+        self, message: str, error: bool = False, path: Path | None = None
+    ) -> None:
+        """Post one export status update, as pushed by the configurator's worker.
+
+        `path` is the finished file, offered beside the message as a link.
+        """
         self._report(message, error=error)
+
+        if path is not None:
+            self._offer_open(path)
 
     def set_running(self, running: bool) -> None:
         """Grey the Save button out while an export is under way."""
@@ -196,7 +204,7 @@ class SettingsDialog(ctk.CTkToplevel, FieldForm[DisplayConfig]):  # type: ignore
         )
 
         row += 1
-        self._status.grid(row=row, column=0, columnspan=3, sticky="ew", padx=8, pady=8)
+        self._grid_status(row)
 
     def _restore(self) -> None:
         """Put every setting back the way it started."""
@@ -221,6 +229,7 @@ class SettingsDialog(ctk.CTkToplevel, FieldForm[DisplayConfig]):  # type: ignore
             return
 
         self._report(f"saved to {Path(chosen).name}", error=False)
+        self._offer_open(Path(chosen))
 
     def _import(self) -> None:
         """Read a settings file back, leaving everything as it was if it is bad."""
