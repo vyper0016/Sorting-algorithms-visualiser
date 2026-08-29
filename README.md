@@ -96,3 +96,10 @@ On Windows, double-clicking `src/main.pyw` starts it without a console window.
 
 Two windows open: the **configurator** shown above, and the pygame window that
 draws the array.
+
+----
+
+### Notes
+
+The software functionality was mainly tested on Windows 11 and
+briefly on an Ubuntu VM.
