@@ -34,6 +34,13 @@ advances one snapshot, Reset builds a fresh array.
 
 ## Installation
 
+Clone repo:
+
+```sh
+git clone https://github.com/vyper0016/Sorting-algorithms-visualiser.git
+cd Sorting-algorithms-visualiser
+```
+
 With [uv](https://docs.astral.sh/uv/), which creates the virtualenv for you:
 
 ```sh
