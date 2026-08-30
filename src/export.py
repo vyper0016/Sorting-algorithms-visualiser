@@ -1,5 +1,7 @@
 """Rendering a whole run to a GIF or an MP4"""
 
+from __future__ import annotations
+
 import array
 import os
 import random
