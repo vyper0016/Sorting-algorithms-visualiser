@@ -153,6 +153,7 @@ class GUI:
 
 def run(width: int = 960, height: int = 540) -> None:
     """Open both windows and drive them from this loop until either one closes."""
+    print(f"Discovered {len(ALGORITHMS)} sorting algorithms.")
     window = Configurator()
     gui = GUI(width, height, window.settings, window.controls, window.display_settings)
     settings, controls = window.settings, window.controls
