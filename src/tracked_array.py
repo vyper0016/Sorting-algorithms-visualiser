@@ -40,6 +40,7 @@ class TrackedArray(list[TrackedInteger]):
         super().__init__(data)
         self.stats = stats if stats is not None else self._shared_stats(data)
         self._original_length = len(self)
+        self._raw: list[int] = [int(element) for element in data]
         self._touches: list[tuple[int, Touch]] = []
         self._marks: dict[int, Color] = {}
         self.current_algo = ""
@@ -105,6 +106,7 @@ class TrackedArray(list[TrackedInteger]):
                 self._reject("slice assignment of a different length", "resize")
 
             super().__setitem__(index, values)
+            self._raw[index] = [int(element) for element in values]
 
             for position in positions:
                 self.stats.on_write()
@@ -113,6 +115,7 @@ class TrackedArray(list[TrackedInteger]):
             return
 
         super().__setitem__(index, value)  # type: ignore[assignment]
+        self._raw[index] = int(value)  # type: ignore[arg-type]
         self.stats.on_write()
         self._record(index, Touch.WRITE)
 
@@ -246,13 +249,13 @@ class TrackedArray(list[TrackedInteger]):
         )
 
     @icontract.ensure(
-        lambda self, result: len(result.values) == self._original_length,
+        lambda self, result: len(result.values) == len(self) == self._original_length,
         "array was resized",
     )
     def snapshot(self) -> Snapshot:
         """Capture contents, counters, and the accesses since the last snapshot."""
         snapshot = Snapshot(
-            values=tuple(int(x) for x in self),
+            values=tuple(self._raw),
             reads=self.stats.reads,
             writes=self.stats.writes,
             comparisons=self.stats.comparisons,
