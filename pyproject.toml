@@ -18,7 +18,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy", "pre-commit", "fawltydeps", "interrogate"]
+dev = [
+    "pytest",
+    "ruff",
+    "mypy",
+    "pre-commit",
+    "fawltydeps",
+    "interrogate",
+    "snakeviz",
+]
 
 [project.scripts]
 sortvis = "gui:run"
@@ -80,7 +88,16 @@ ignore-module = true
 ignore-overloaded-functions = true
 # TrackedArray's rejected list methods: one line that raises, named by the
 # message it raises. See src/algorithms/README.md for why they are refused.
-ignore-regex = ["append", "extend", "insert", "pop", "remove", "clear", "reverse"]
+ignore-regex = [
+    "append",
+    "extend",
+    "insert",
+    "pop",
+    "remove",
+    "clear",
+    "reverse",
+    "^sort$",
+]
 exclude = ["tests"]
 
 [tool.fawltydeps]
@@ -108,4 +125,5 @@ ignore_unused = [
     "pre-commit",
     "fawltydeps",
     "interrogate",
+    "snakeviz",
 ]
