@@ -224,6 +224,9 @@ class TrackedArray(list[TrackedInteger]):
     def reverse(self) -> NoReturn:
         self._reject("reverse", "silently rewrite")
 
+    def sort(self, **kwargs: object) -> NoReturn:
+        self._reject("sort", "silently rewrite")
+
     @icontract.require(lambda size: size >= 0)
     def buffer(self, size: int = 0) -> "TrackedArray":
         """Return zero-filled scratch space that bills to this array's stats.
