@@ -84,6 +84,7 @@ class FieldForm(Generic[Settings]):
         self._entries: dict[str, ctk.CTkEntry] = {}
         self._status = ctk.CTkLabel(self, text="", anchor="w")
         self._target: Path | None = None
+        self._link_row = 0
         self._link = ctk.CTkLabel(
             self,
             text="Open",
@@ -95,15 +96,14 @@ class FieldForm(Generic[Settings]):
         self._link.bind("<Button-1>", lambda _event: self._open_target())
 
     def _grid_status(self, row: int) -> None:
-        """Put the status line, and the Open link it can offer, on `row`."""
+        """Put the status line on `row`, remembering it for the Open link."""
         self._status.grid(row=row, column=0, columnspan=2, sticky="ew", padx=8, pady=8)
-        self._link.grid(row=row, column=2, sticky="e", padx=8, pady=8)
-        self._link.grid_remove()
+        self._link_row = row
 
     def _offer_open(self, path: Path) -> None:
         """Offer `path` beside the status line, as a link that opens it."""
         self._target = path
-        self._link.grid()
+        self._link.grid(row=self._link_row, column=2, sticky="e", padx=8, pady=8)
 
     def _open_target(self) -> None:
         """Open the file the link points at, reporting a refusal in its place."""
@@ -311,7 +311,7 @@ class FieldForm(Generic[Settings]):
 
     def _report(self, message: str, error: bool = True) -> None:
         """Show `message` in the status line, an empty one clearing it."""
-        self._link.grid_remove()
+        self._link.grid_forget()
         normal = ("gray10", "gray90")
         self._status.configure(
             text=message, text_color=_ERROR_COLOR if message and error else normal
